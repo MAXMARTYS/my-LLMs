@@ -1,0 +1,19 @@
+[project]
+name = "custom-llm"
+version = "0.1.0"
+description = "Some LLM experiments on Wikipedia 2 article"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "jupyterlab",
+    "ipykernel",
+
+    # Core ML stack
+    "numpy",
+    "matplotlib",
+    "torch",                     # PyTorch (CPU by default)
+
+    # HuggingFace ecosystem
+    "transformers",
+    "datasets",
+]
