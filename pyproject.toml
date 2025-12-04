@@ -12,6 +12,7 @@ dependencies = [
     "numpy",
     "matplotlib",
     "torch",                     # PyTorch (CPU by default)
+    "torchinfo",
 
     # HuggingFace ecosystem
     "transformers",

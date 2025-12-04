@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import numpy as np 
 from transformers import AutoModel
 import math
+from torchinfo import summary
 
 class TokenEmbedding(nn.Module):
     def __init__(self):
@@ -15,6 +16,9 @@ class TokenEmbedding(nn.Module):
 
         self.embed = nn.Embedding(vocab_size, embed_dim)
         self.embed.weight = nn.Parameter(embedding)
+
+        # Freeze the embedding
+        self.embed.weight.requires_grad = False 
 
     def get_info(self):
         vocab_size, embed_dim = self.embed.weight.shape
@@ -112,6 +116,9 @@ class LLM(nn.Module):
         self.norm = nn.LayerNorm(embed_dim)
         self.head = nn.Linear(embed_dim, vocab_size, bias=False)
 
+        self.head.weight = self.embedding.embed.weight
+        self.head.weight.requires_grad = False  # Keep frozen
+
     def forward(self, idx):
         B, T = idx.shape
 
@@ -150,4 +157,9 @@ class LLM(nn.Module):
 if __name__=='__main__':
     # Check if there are no initialization errors
     model = LLM(num_heads=8, depth=4)
+    summary(
+        model, 
+        input_size=(2, 512),  # (batch_size, seq_len)
+        dtypes=[torch.long],  # Specify integer type
+    )
     print('Everything works!')
