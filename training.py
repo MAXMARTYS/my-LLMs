@@ -7,19 +7,22 @@ import torch.nn as nn
 
 from transformer import LLM
 
-def collate_batch(batch):
-    input_ids = [item['input_ids'] for item in batch]
-    input_ids = pad_sequence(
-        input_ids, 
-        batch_first=True, 
-        padding_value=0 
-    )
+# Extend each sequence length to 512 (max length)
+def collate_batch(batch, max_len=512):
+    input_ids = [item['input_ids'][:max_len] for item in batch]  # truncate
+
+    input_ids = [torch.cat([seq, torch.zeros(max_len - len(seq), dtype=torch.long)]) 
+                 if len(seq) < max_len else seq
+                 for seq in input_ids]
+
+    input_ids = torch.stack(input_ids)
 
     attention_mask = (input_ids != 0).long()
     return {
         "input_ids": input_ids,
         "attention_mask": attention_mask,
     }
+
 
 # Load dataset
 dataset = load_from_disk('tokenized_wiki')
