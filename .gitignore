@@ -11,3 +11,6 @@ wheels/
 
 # Dataset
 tokenized_wiki/
+
+# Testing notebook
+dataset.ipynb

@@ -57,6 +57,8 @@ class MultiHeadAttention(nn.Module):
     def forward(self, x):
         B, T, C = x.size() # Batch (size), tokens (sequence length), chanels (embedding dim)
 
+        mask = torch.tril(torch.ones(T, T, device=x.device)).view(1, 1, T, T)
+
         key = self.W_k(x)
         query = self.W_q(x)
         value = self.W_v(x)
@@ -65,10 +67,9 @@ class MultiHeadAttention(nn.Module):
         query = query.view(B, T, self.num_heads, self.h_dim).transpose(1, 2)
         value = value.view(B, T, self.num_heads, self.h_dim).transpose(1, 2)
 
-        output, _ = MultiHeadAttention.scaled_dot_product_attention(query, key, value)
+        output, _ = MultiHeadAttention.scaled_dot_product_attention(query, key, value, mask=mask, dropout=self.dropout)
         output = output.transpose(1, 2).contiguous().view(B, T, C) # Combining multiple heads
         output = self.out(output)
-        output = self.dropout(output)
 
         return output
 
@@ -125,6 +126,26 @@ class LLM(nn.Module):
         x = self.head(x)
 
         return x
+    
+    @torch.no_grad()
+    def generate(self, idx, max_new_tokens, temperature=1.0):
+        self.eval()
+
+        for _ in range(max_new_tokens):
+            idx_cond = idx if idx.size(1) <= 2048 else idx[:, -2048:]
+
+        logits = self(idx_cond)
+        logits = logits[:, -1, :] # Get last token
+        
+        logits = logits / temperature
+
+        probs = F.softmax(logits, dim=-1)
+        idx_next = torch.multinomial(probs, num_samples=1)
+
+        idx = torch.cat([idx, idx_next], dim=1)
+
+        return idx
+
     
 if __name__=='__main__':
     # Check if there are no initialization errors
