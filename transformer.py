@@ -1,9 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np 
 from transformers import AutoModel
-import math
 from torchinfo import summary
 
 class TokenEmbedding(nn.Module):
@@ -62,7 +60,7 @@ class MultiHeadAttention(nn.Module):
         B, T, C = x.size() # Batch (size), tokens (sequence length), chanels (embedding dim)
 
         mask = torch.tril(torch.ones(T, T, device=x.device)).view(1, 1, T, T)
-
+        
         key = self.W_k(x)
         query = self.W_q(x)
         value = self.W_v(x)

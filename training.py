@@ -19,8 +19,8 @@ def collate_batch(batch, max_len=512):
 
     attention_mask = (input_ids != 0).long()
     return {
-        "input_ids": input_ids,
-        "attention_mask": attention_mask,
+        'input_ids': input_ids,
+        'attention_mask': attention_mask,
     }
 
 
@@ -64,4 +64,5 @@ for epoch in range(epochs):
 
         pbar.set_postfix(loss=loss.item())
 
-torch.save('my_llm_model.pt')
+torch.save('transformer_model.pt')
+
