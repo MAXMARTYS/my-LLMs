@@ -4,19 +4,27 @@ import torch.nn.functional as F
 from transformers import AutoModel
 from torchinfo import summary
 
+# TODO: 
+# - think about using CUDA kernel tricks to speed up the training process
+
 class TokenEmbedding(nn.Module):
-    def __init__(self):
+    def __init__(self, pretrained=False, vocab_size=50257, embed_dim=None):
         super().__init__()
 
-        gpt2 = AutoModel.from_pretrained('gpt2')
-        embedding = gpt2.get_input_embeddings().weight.detach().clone()
-        vocab_size, d_model = embedding.shape
+        if pretrained:
+            gpt2 = AutoModel.from_pretrained('gpt2')
+            embedding = gpt2.get_input_embeddings().weight.detach().clone()
+            self.vocab_size, self.embed_dim = embedding.shape
 
-        self.embed = nn.Embedding(vocab_size, d_model)
-        self.embed.weight = nn.Parameter(embedding)
+            self.embed = nn.Embedding(self.vocab_size, self.embed_dim)
+            self.embed.weight = nn.Parameter(embedding)
 
-        # Freeze the embedding
-        self.embed.weight.requires_grad = False 
+            self.embed.weight.requires_grad = False 
+
+        else:
+            self.embed = nn.Embedding(vocab_size, embed_dim)
+            self.vocab_size = vocab_size
+            self.embed_dim = embed_dim
 
     def get_info(self):
         vocab_size, d_model = self.embed.weight.shape
@@ -31,7 +39,8 @@ class SSM(nn.Module):
         self.d_model = d_model
         self.d_hidden = d_hidden
 
-        self.A = nn.Linear(d_model, d_hidden) # Hidden value updater
+        # self.A = nn.Linear(d_model, d_hidden) # Hidden value updater
+        self.A = nn.Parameter(torch.randn(d_hidden))
         self.B = nn.Linear(d_model, d_hidden) # Input - hidden state translation 
         self.C = nn.Linear(d_hidden, d_model) # Hidden state - output translation
         self.D = nn.Linear(d_model, d_model) # Skip connection
@@ -39,16 +48,18 @@ class SSM(nn.Module):
 
     def forward(self, x):
 
-        x_delta = F.softplus( self.delta(x) )
+        delta = F.softplus( self.delta(x) )
 
-        A_t = self.A(x)
-        A_bar = torch.exp( -x_delta * A_t )
+        # A_t = self.A(x)
+        A_bar = torch.exp( delta * self.A )
 
-        B_x = self.B(x)
+        # B_x = self.B(x)
+        B_bar = delta * self.B(x)
 
         # New implementation - pytorch vectorization TODO: this may have an error
         A_cum = torch.cumprod(A_bar, dim=1)
-        h = torch.cumsum(B_x * A_cum, dim=1)
+        # h = torch.cumsum(B_x * A_cum, dim=1)
+        h = torch.cumsum(B_bar / A_cum, dim=1) * A_cum
 
         out = self.C(h) + self.D(x)
         return out
@@ -86,11 +97,8 @@ class MambaBlock(nn.Module):
 class MambaModel(nn.Module):
     def __init__(self, d_model, d_hidden, n_blocks):
         super().__init__()
-        self.embedding = TokenEmbedding()
+        self.embedding = TokenEmbedding(pretrained=False, embed_dim=d_model)
         vocab_size, embed_dim = self.embedding.get_info()
-
-        if d_model == None:
-            d_model = embed_dim 
 
         self.blocks = nn.ModuleList([
             MambaBlock(d_model, d_hidden) for _ in range(n_blocks)
@@ -100,7 +108,7 @@ class MambaModel(nn.Module):
         self.head = nn.Linear(d_model, vocab_size, bias=False)
 
         self.head.weight = self.embedding.embed.weight
-        self.head.weight.requires_grad = False  # Keep frozen
+        # self.head.weight.requires_grad = False  # Keep frozen
 
     def forward(self, x):
         x = self.embedding(x)
@@ -112,11 +120,15 @@ class MambaModel(nn.Module):
         out = self.head(x)
 
         return out
-        
+    
+    @torch.no_grad()
+    def generate(self):
+        pass
+
 
 if __name__=='__main__':
     # Check if there are no initialization errors
-    model = MambaModel(d_model=None, d_hidden=2048, n_blocks=4)
+    model = MambaModel(d_model=512, d_hidden=2048, n_blocks=6)
     summary(
         model, 
         input_size=(2, 512),  # (batch_size, seq_len)
