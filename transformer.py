@@ -4,23 +4,30 @@ import torch.nn.functional as F
 from transformers import AutoModel
 from torchinfo import summary
 
+# TODO: 
+# - try implementing KV cache
+
 class TokenEmbedding(nn.Module):
-    def __init__(self):
+    def __init__(self, pretrained=False, vocab_size=50257, embed_dim=None):
         super().__init__()
 
-        gpt2 = AutoModel.from_pretrained('gpt2')
-        embedding = gpt2.get_input_embeddings().weight.detach().clone()
-        vocab_size, embed_dim = embedding.shape
+        if pretrained:
+            gpt2 = AutoModel.from_pretrained('gpt2')
+            embedding = gpt2.get_input_embeddings().weight.detach().clone()
+            self.vocab_size, self.embed_dim = embedding.shape
 
-        self.embed = nn.Embedding(vocab_size, embed_dim)
-        self.embed.weight = nn.Parameter(embedding)
+            self.embed = nn.Embedding(self.vocab_size, self.embed_dim)
+            self.embed.weight = nn.Parameter(embedding)
 
-        # Freeze the embedding
-        self.embed.weight.requires_grad = False 
+            self.embed.weight.requires_grad = False 
+
+        else:
+            self.embed = nn.Embedding(vocab_size, embed_dim)
+            self.vocab_size = vocab_size
+            self.embed_dim = embed_dim
 
     def get_info(self):
-        vocab_size, embed_dim = self.embed.weight.shape
-        return vocab_size, embed_dim
+        return self.vocab_size, self.embed_dim
 
     def forward(self, x):
         return self.embed(x)
@@ -102,7 +109,7 @@ class LLM(nn.Module):
     def __init__(self, depth, num_heads):
         super().__init__()
 
-        self.embedding = TokenEmbedding()
+        self.embedding = TokenEmbedding(pretrained=False, embed_dim=512)
         vocab_size, embed_dim = self.embedding.get_info()
         # print(vocab_size, embed_dim)
 
@@ -115,7 +122,7 @@ class LLM(nn.Module):
         self.head = nn.Linear(embed_dim, vocab_size, bias=False)
 
         self.head.weight = self.embedding.embed.weight
-        self.head.weight.requires_grad = False  # Keep frozen
+        # self.head.weight.requires_grad = False  # Keep frozen
 
     def forward(self, idx):
         B, T = idx.shape
@@ -139,22 +146,22 @@ class LLM(nn.Module):
         for _ in range(max_new_tokens):
             idx_cond = idx if idx.size(1) <= 2048 else idx[:, -2048:]
 
-        logits = self(idx_cond)
-        logits = logits[:, -1, :] # Get last token
-        
-        logits = logits / temperature
+            logits = self(idx_cond)
+            logits = logits[:, -1, :] # Get last token
+            
+            logits = logits / temperature
 
-        probs = F.softmax(logits, dim=-1)
-        idx_next = torch.multinomial(probs, num_samples=1)
+            probs = F.softmax(logits, dim=-1)
+            idx_next = torch.multinomial(probs, num_samples=1)
 
-        idx = torch.cat([idx, idx_next], dim=1)
+            idx = torch.cat([idx, idx_next], dim=1)
 
         return idx
 
     
 if __name__=='__main__':
     # Check if there are no initialization errors
-    model = LLM(num_heads=8, depth=4)
+    model = LLM(num_heads=8, depth=6)
     summary(
         model, 
         input_size=(2, 512),  # (batch_size, seq_len)
