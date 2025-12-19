@@ -54,7 +54,7 @@ class MultiHeadAttention(nn.Module):
         attn_scores = (Q @ K.transpose(-2, -1)) / (d_k ** 0.5)
 
         if mask is not None:
-            attn_scores = attn_scores.masked_fill(mask == 0, -1e10)
+            attn_scores = attn_scores.masked_fill(mask == 0, -1e4)
 
         attn_scores = attn_scores.softmax(dim=-1)
 
@@ -162,9 +162,11 @@ class LLM(nn.Module):
 if __name__=='__main__':
     # Check if there are no initialization errors
     model = LLM(num_heads=8, depth=6)
-    summary(
+    summary = summary(
         model, 
         input_size=(2, 512),  # (batch_size, seq_len)
         dtypes=[torch.long],  # Specify integer type
     )
+    print(summary)
+    print(summary.total_params)
     print('Everything works!')
