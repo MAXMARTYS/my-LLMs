@@ -6,71 +6,85 @@ import torch
 import torch.nn as nn
 from torch.amp import autocast, GradScaler
 from torch.optim.lr_scheduler import CosineAnnealingLR
+from torchinfo import summary
 
 from transformer import LLM
 
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+torch.backends.cudnn.benchmark = True
+
+# Extend each sequence length to 512 (max length)
 def collate_batch(batch):
     input_ids = [item['input_ids'] for item in batch]
+
     input_ids = pad_sequence(
-        input_ids, 
-        batch_first=True, 
-        padding_value=0 
+        input_ids,
+        batch_first=True,
+        padding_value=0
     )
 
     attention_mask = (input_ids != 0).long()
+
     return {
-        "input_ids": input_ids,
-        "attention_mask": attention_mask,
+        'input_ids': input_ids,
+        'attention_mask': attention_mask,
     }
+
+
 
 # Load dataset
 dataset = load_from_disk('tokenized_wiki')
 dataset.set_format(type='torch', columns=['input_ids', 'attention_mask'])
-
-train_loader = DataLoader(
-    dataset['train'], 
-    batch_size=4,
-    shuffle=True,
-    collate_fn=collate_batch,
-    num_workers=4,
-    pin_memory=True,
-    persistent_workers=True
-)
+batch_size = 16
+train_loader = DataLoader(dataset['train'], batch_size=batch_size, shuffle=True, collate_fn=collate_batch,)
 
 # Model, loss, optimizer
-model = LLM(depth=4, num_heads=8)
+model = LLM(depth=6, num_heads=8)
+# model.gradient_checkpointing_enable()
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model = torch.compile(model)
 model.to(device)
 
-criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.AdamW(
-    model.parameters(), 
-    lr=3e-4,
-    betas=(0.9, 0.95),
-    weight_decay=0.1,
-    fused=True if device.type == 'cuda' else False
-)
-scheduler = CosineAnnealingLR(optimizer, T_max=100 * len(train_loader))
+criterion = nn.CrossEntropyLoss(ignore_index=0)
+optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
 scaler = GradScaler()
+scheduler = CosineAnnealingLR(optimizer, T_max=100 * len(train_loader))
 
 # Training loop
+# I made math and 1 epoch is more than enough. We have ~2B tokens and the model is ~70M params.
+# A lot of sources suggest 20 tokens per parameter, so 1.4B is enough.
+epochs = 1 
+
+token_param_ratio = 20
+param_count = summary(
+    model, 
+    input_size=(2, 512), 
+    dtypes=[torch.long], 
+    verbose=0
+).total_params
+max_tokens = param_count * token_param_ratio
+
 accumulation_steps = 4
-epochs = 100
+tokens_seen = 0
+end_training = False
 
 for epoch in range(epochs):
     print(f'Epoch {epoch+1}/{epochs}')
-    model.train()
 
     pbar = tqdm(train_loader, desc='Training', leave=True)
 
+    optimizer.zero_grad(set_to_none=True)
+
     for batch_idx, batch in enumerate(pbar):
-        input_ids = batch['input_ids'].to(device, non_blocking=True)
+
+        input_ids = batch['input_ids'].to(device)
+        batch_size = input_ids.shape[0]
+        seq_len = input_ids.shape[1] - 1
 
         inputs  = input_ids[:, :-1].contiguous()
         targets = input_ids[:, 1:].contiguous()
 
-        with autocast():
+        with autocast('cuda'):
             logits = model(inputs)
             logits = logits.reshape(-1, logits.size(-1))
             targets_flat = targets.reshape(-1)
@@ -78,27 +92,24 @@ for epoch in range(epochs):
             loss = loss / accumulation_steps
 
         scaler.scale(loss).backward()
-        
-        # Update weights every accumulation_steps
+
         if (batch_idx + 1) % accumulation_steps == 0:
             scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             scaler.step(optimizer)
             scaler.update()
-            optimizer.zero_grad()
-            scheduler.step()
-        
-        pbar.set_postfix(
-            loss=loss.item() * accumulation_steps,
-            lr=scheduler.get_last_lr()[0]
-        )
+            optimizer.zero_grad(set_to_none=True)
+            # scheduler.step()
 
-    if (epoch + 1) % 10 == 0:
-        torch.save({
-            'epoch': epoch,
-            'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            'scheduler_state_dict': scheduler.state_dict(),
-        }, f'checkpoint_epoch_{epoch+1}.pt')
+        pbar.set_postfix(loss=loss.item())
 
-torch.save(model.state_dict(), 'my_llm_model.pt')
+        tokens_seen += batch_size * seq_len
+        if tokens_seen > max_tokens:
+            end_training = True
+            break
+
+    if end_training:
+        break
+
+torch.save('transformer_model.pt')
+
