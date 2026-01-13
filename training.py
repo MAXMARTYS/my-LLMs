@@ -64,7 +64,8 @@ model = LLM(depth=4, num_heads=8)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model.to(device)
 
-criterion = nn.CrossEntropyLoss()
+padding_value = 0
+criterion = nn.CrossEntropyLoss(ignore_index=padding_value)
 optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
 
 # Training loop
@@ -83,14 +84,14 @@ if os.path.exists(checkpoint_path):
 else:
     print('No checkpoints found. Starting from scratch.')
 
-for epoch in range(epochs):
+for epoch in range(start_epoch, epochs):
     print(f'Epoch {epoch+1}/{epochs}')
 
     pbar = tqdm(train_loader, desc='Training', leave=True)
 
     for batch_idx, batch in enumerate(pbar):
 
-        if epoch <= start_epoch and batch_idx < start_batch:
+        if epoch == start_epoch and batch_idx < start_batch:
             continue  # Skip already trained batches
 
         input_ids = batch['input_ids'].to(device)
