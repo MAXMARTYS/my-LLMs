@@ -4,10 +4,48 @@ import torch.nn.functional as F
 from transformers import AutoModel
 from torchinfo import summary
 
-# TODO: make both cells multiheaded
-# I believe a correct way of doing that is Conv1D instead of linear, with groups=n_heads
-# Only then, I will be able to move to full blocks
-class sLSTMcell(nn.Module):
+# Code for block diagonal and causal conv taken from this repo:
+# https://github.com/styalai/xLSTM-pytorch
+
+# I am still afraid that these modules are wrong with my implementation
+class BlockDiagonal(nn.Module):
+    def __init__(self, in_features, out_features, num_blocks, bias=True):
+        super().__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.num_blocks = num_blocks
+
+        assert out_features % num_blocks == 0
+        
+        block_out_features = out_features // num_blocks
+        
+        self.blocks = nn.ModuleList([
+            nn.Linear(in_features, block_out_features, bias=bias)
+            for _ in range(num_blocks)
+        ])
+
+    def forward(self, x):
+        x = [block(x) for block in self.blocks]
+        x = torch.cat(x, dim=-1)
+        return x
+
+class CausalConv1D(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, dilation=1, **kwargs):
+        super().__init__()
+        self.padding = (kernel_size - 1) * dilation
+        if self.padding <= 0:
+            self.padding = 1
+        self.conv = nn.Conv1d(in_channels, out_channels, kernel_size, padding=self.padding, dilation=dilation, **kwargs)
+
+    def forward(self, x):
+        x = self.conv(x)
+        return x[:, :, :-self.padding]
+
+class Swish(nn.Module):
+    def forward(self, x):
+        return x * torch.sigmoid(x)
+
+class sLSTMblock(nn.Module):
     def __init__(self, d_hidden, n_heads):
         super().__init__()
         self.d_hidden = d_hidden
@@ -15,23 +53,38 @@ class sLSTMcell(nn.Module):
         assert d_hidden % n_heads == 0, 'd_hidden must be divisible by n_heads'
         self.d_head = d_hidden // n_heads
 
-        self.W_z = nn.Linear(d_hidden, d_hidden, bias=True)
-        self.W_i = nn.Linear(d_hidden, d_hidden, bias=True)
-        self.W_f = nn.Linear(d_hidden, d_hidden, bias=True)
-        self.W_o = nn.Linear(d_hidden, d_hidden, bias=True)
+        # Block diagonals instead of linear to simulate multiple heads
+        self.W_z = BlockDiagonal(d_hidden, d_hidden, n_heads, bias=True)
+        self.W_i = BlockDiagonal(d_hidden, d_hidden, n_heads, bias=True)
+        self.W_f = BlockDiagonal(d_hidden, d_hidden, n_heads, bias=True)
+        self.W_o = BlockDiagonal(d_hidden, d_hidden, n_heads, bias=True)
 
-        self.R_z = nn.Linear(d_hidden, d_hidden, bias=False)
-        self.R_i = nn.Linear(d_hidden, d_hidden, bias=False)
-        self.R_f = nn.Linear(d_hidden, d_hidden, bias=False)
-        self.R_o = nn.Linear(d_hidden, d_hidden, bias=False)
+        self.R_z = BlockDiagonal(d_hidden, d_hidden, n_heads, bias=False)
+        self.R_i = BlockDiagonal(d_hidden, d_hidden, n_heads, bias=False)
+        self.R_f = BlockDiagonal(d_hidden, d_hidden, n_heads, bias=False)
+        self.R_o = BlockDiagonal(d_hidden, d_hidden, n_heads, bias=False)
 
-    def step(self, x, h, c, n, m, epsilon=1e-8): # Input, hidden state, cell state, normalizer state, staabilizer state
-        B, T, D = x.shape
+        self.conv = CausalConv1D(self.d_hidden, self.d_hidden, kernel_size=4)
 
-        z_bar = self.W_z(x) + self.R_z(h) # Cell input
-        i_bar = self.W_i(x) + self.R_i(h) # Input gate
-        f_bar = self.W_f(x) + self.R_f(h) # Forget gate
-        o_bar = self.W_o(x) + self.R_o(h) # Output gate
+        self.dropout = nn.Dropout(0.2)
+
+        self.ln = nn.LayerNorm(d_hidden)
+        self.gn = nn.LayerNorm(d_hidden)
+
+        self.left_linear = nn.Linear(d_hidden, int(d_hidden*4/3))
+        self.right_linear = nn.Linear(d_hidden, int(d_hidden*4/3))
+
+        self.last_linear = nn.Linear(int(d_hidden*4/3), d_hidden)
+
+        self.gelu = nn.GELU()
+        self.swish = Swish()
+
+    def step(self, x_if, x_zo, h, c, n, m, epsilon=1e-8): # Input, hidden state, cell state, normalizer state, staabilizer state
+
+        z_bar = self.W_z(x_zo) + self.R_z(h) # Cell input
+        i_bar = self.W_i(x_if) + self.R_i(h) # Input gate
+        f_bar = self.W_f(x_if) + self.R_f(h) # Forget gate
+        o_bar = self.W_o(x_zo) + self.R_o(h) # Output gate
 
         z = torch.tanh(z_bar)
         # i = torch.exp(i_bar)
@@ -60,19 +113,37 @@ class sLSTMcell(nn.Module):
         else:
             h, c, n, m = state
 
+        x_norm = self.ln(x)
+
+        x_if = self.swish( self.conv(x_norm) ) # Input for i and f gates
+        x_if = self.dropout(x_if)
+        x_zo = x # Input for z and o gates
+
         hs = []
         for t in range(T):
-            h, c, n, m = self.step(x[:, t], h, c, n, m)
+            h, c, n, m = self.step(x_if[:, t], x_zo[:, t], h, c, n, m)
             hs.append(h)
 
         h_seq = torch.stack(hs, dim=1)
-        return h_seq, (h, c, n, m)
-        
- 
-class sLSTMblock:
-    pass
 
-class mLSTMcell(nn.Module):
+        h_gn = self.gn(h_seq)
+        h_gn = self.drouput(h_gn)
+        h_skip = h_gn + x # First skip connection
+        h_skip_norm = self.ln(x)
+
+        z_left = self.left_linear(h_skip_norm)
+        z_right = self.gelu( self.right_linear(h_skip_norm) )
+
+        z = z_left * z_right
+        z = self.drouput(z)
+
+        out = self.last_linear(z)
+        out = self.dropout(out)
+        out = out + h_skip # Second skip connection
+
+        return out, (h, c, n, m)
+
+class mLSTMblock(nn.Module):
     def __init__(self, d_hidden):
         super().__init__()
         self.d_hidden = d_hidden
@@ -133,15 +204,12 @@ class mLSTMcell(nn.Module):
 
         h_seq = torch.stack(hs, dim=1)
         return h_seq, (h, c, n, m)
-    
-class mLSTMblock:
-    pass
 
 class xLSTM:
     pass
 
 if __name__=='__main__':
-    slstm = sLSTMcell(d_hidden=128, n_heads=4)
+    slstm = sLSTMblock(d_hidden=128, n_heads=4)
     dummy_x = torch.randn(2, 10, 128)
     out, state = slstm(dummy_x)
     print('sLSTM output shape:', out.shape)
