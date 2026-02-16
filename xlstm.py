@@ -115,8 +115,10 @@ class sLSTMblock(nn.Module):
 
         x_norm = self.ln(x)
 
-        x_if = self.swish( self.conv(x_norm) ) # Input for i and f gates
+        x_conv = x_norm.transpose(1, 2)
+        x_if = self.swish( self.conv(x_conv).transpose(1, 2) ) # Input for i and f gates
         x_if = self.dropout(x_if)
+
         x_zo = x # Input for z and o gates
 
         hs = []
@@ -127,15 +129,15 @@ class sLSTMblock(nn.Module):
         h_seq = torch.stack(hs, dim=1)
 
         h_gn = self.gn(h_seq)
-        h_gn = self.drouput(h_gn)
+        h_gn = self.dropout(h_gn)
         h_skip = h_gn + x # First skip connection
-        h_skip_norm = self.ln(x)
+        h_skip_norm = self.ln(h_skip)
 
         z_left = self.left_linear(h_skip_norm)
         z_right = self.gelu( self.right_linear(h_skip_norm) )
 
         z = z_left * z_right
-        z = self.drouput(z)
+        z = self.dropout(z)
 
         out = self.last_linear(z)
         out = self.dropout(out)
@@ -156,14 +158,27 @@ class mLSTMblock(nn.Module):
         self.W_k = nn.Linear(d_hidden, d_hidden, bias=True)
         self.W_v = nn.Linear(d_hidden, d_hidden, bias=True)
 
-    def step(self, x, c, n, m):
+        self.conv = CausalConv1D(self.d_hidden, self.d_hidden, kernel_size=4)
+
+        self.ln = nn.LayerNorm(d_hidden)
+        self.gn = nn.LayerNorm(d_hidden)
+
+        self.left_linear = nn.Linear(d_hidden, int(d_hidden*2))
+        self.right_linear = nn.Linear(d_hidden, int(d_hidden*2))
+        self.last_linear = nn.Linear(int(d_hidden*0.5), d_hidden)
+
+        self.gelu = nn.GELU()
+        self.swish = Swish()
+        self.dropout = nn.Dropout(0.2)
+
+    def step(self, x, x_trans, c, n, m, epsilon=1e-8):
         
         i_bar = self.W_i(x) # Input gate
         f_bar = self.W_f(x) # Forget gate
         o_bar = self.W_o(x) # Output gate
 
-        q = self.W_q(x) # Query
-        k = (1 / torch.sqrt(self.d_hidden)) * self.W_k(x) # Key
+        q = self.W_q(x_trans) # Query
+        k = (1 / torch.sqrt(self.d_hidden)) * self.W_k(x_trans) # Key
         v = self.W_v(x) # Value
 
         m_next = torch.maximum( f_bar + m, i_bar ) # We can also use log(f) and log(i)
@@ -178,8 +193,9 @@ class mLSTMblock(nn.Module):
 
         # Still no idea why we compute the hidden state in mLSTM
         cq = c_next @ q.unsqueeze(-1)
-        denominator = torch.maximum(torch.abs(n_next.T * q).sum(-1, keepdim=True), x.new_ones((x.size(0), 1)))
-        h_bar = cq / denominator
+        cq = cq.squeeze(-1)
+        denominator = torch.maximum(torch.abs(n_next * q).sum(-1, keepdim=True), torch.ones_like(n_next[:, :1]))
+        h_bar = cq / (denominator + epsilon)
         h = o * h_bar
 
         return h, c_next, n_next, m_next
@@ -196,17 +212,43 @@ class mLSTMblock(nn.Module):
         else:
             h, c, n, m = state
 
+        x_norm = self.ln(x)
+
+        x_left = self.left_linear(x_norm)
+        x_rigth = self.right_linear(x_norm)
+
+        x_conv = x_left.transpose(1, 2)
+        x_trans = self.swish( self.conv(x_conv).transpose(1, 2) )
+
         # This loop is technically vectorizable (like in Mamba) --> I can try to add it later
         hs = []
         for t in range(T):
-            h, c, n, m = self.step(x[:, t], c, n, m)
+            h, c, n, m = self.step(x[:, t], x_trans[:, t], c, n, m)
             hs.append(h)
 
         h_seq = torch.stack(hs, dim=1)
+
+        h_gn = self.gn(h_seq)
+        h_gn = h_gn + x_trans # First skip connection
+
+        x_rigth = self.swish( x_rigth )
+        h = h_gn * x_rigth
+
+        out = self.last_linear(h)
+        out = out + x # Second skip connection
+
         return h_seq, (h, c, n, m)
 
 class xLSTM:
-    pass
+    def __init__(self):
+        pass 
+
+    def forward():
+        pass 
+
+    @torch.no_grad()
+    def generate():
+        pass
 
 if __name__=='__main__':
     slstm = sLSTMblock(d_hidden=128, n_heads=4)

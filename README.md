@@ -1,0 +1,1 @@
+An ongoaing hobby project exploring post-transformer language model architectures.
