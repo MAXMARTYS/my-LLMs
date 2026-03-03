@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from datasets import load_from_disk
 
-from mamba import MambaModel
+from models.mamba.mamba import MambaModel
 
 # Extend sequences to a fixed length
 def collate_batch(batch, max_len=512):

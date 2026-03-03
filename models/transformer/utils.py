@@ -1,11 +1,7 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from transformers import AutoModel
-from torchinfo import summary
-
-# TODO: 
-# - try implementing KV cache
+from tqdm import tqdm
 
 class TokenEmbedding(nn.Module):
     def __init__(self, pretrained=False, vocab_size=50257, embed_dim=None):
@@ -105,68 +101,37 @@ class TransformerBlock(nn.Module):
         x = x + self.resid_dropout2( self.mlp( self.norm2(x) ))
         return x
     
-class LLM(nn.Module):
-    def __init__(self, depth, num_heads):
-        super().__init__()
+def calculate_perplexity(model, dataloader, device, max_batches, ignore_index=0):
+    total_loss = 0.0
+    total_tokens = 0
+    n_batches = 0
 
-        self.embedding = TokenEmbedding(pretrained=False, embed_dim=512)
-        vocab_size, embed_dim = self.embedding.get_info()
-        # print(vocab_size, embed_dim)
+    criterion = torch.nn.CrossEntropyLoss(ignore_index=ignore_index, reduction='sum')
+    batch_size = next(iter(dataloader))['input_ids'].shape[0]
 
-        self.pos_emb = nn.Embedding(2048, embed_dim)
+    with torch.no_grad():
+        for batch in tqdm(dataloader, desc='Calculating perplexity', total=max_batches//batch_size):
+            input_ids = batch['input_ids'].to(device)
 
-        self.blocks = nn.ModuleList([
-            TransformerBlock(embed_dim, num_heads) for _ in range(depth)
-        ])
-        self.norm = nn.LayerNorm(embed_dim)
-        self.head = nn.Linear(embed_dim, vocab_size, bias=False)
+            inputs  = input_ids[:, :-1].contiguous()
+            targets = input_ids[:, 1:].contiguous()
 
-        self.head.weight = self.embedding.embed.weight
-        # self.head.weight.requires_grad = False  # Keep frozen
+            logits = model(inputs)
+            logits = logits.reshape(-1, logits.size(-1))
+            targets = targets.reshape(-1)
 
-    def forward(self, idx):
-        B, T = idx.shape
+            loss = criterion(logits, targets)
 
-        emb = self.embedding(idx)
-        pos = self.pos_emb(torch.arange(T, device=idx.device))[None, :, :]
+            # Count non-padding tokens only
+            non_pad = (targets != ignore_index).sum().item()
+            total_loss += loss.item()
+            total_tokens += non_pad
 
-        x = emb + pos
+            n_batches += batch_size
 
-        for block in self.blocks:
-            x = block(x)
-        x = self.norm(x)
-        x = self.head(x)
+            if n_batches >= max_batches:
+                break
 
-        return x
-    
-    @torch.no_grad()
-    def generate(self, idx, max_new_tokens, temperature=1.0):
-        self.eval()
-
-        for _ in range(max_new_tokens):
-            idx_cond = idx if idx.size(1) <= 2048 else idx[:, -2048:]
-
-            logits = self(idx_cond)
-            logits = logits[:, -1, :] # Get last token
-            
-            logits = logits / temperature
-
-            probs = F.softmax(logits, dim=-1)
-            idx_next = torch.multinomial(probs, num_samples=1)
-
-            idx = torch.cat([idx, idx_next], dim=1)
-
-        return idx
-
-    
-if __name__=='__main__':
-    # Check if there are no initialization errors
-    model = LLM(num_heads=8, depth=6)
-    summary = summary(
-        model, 
-        input_size=(2, 512),  # (batch_size, seq_len)
-        dtypes=[torch.long],  # Specify integer type
-    )
-    print(summary)
-    print(summary.total_params)
-    print('Everything works!')
+    avg_nll = total_loss / total_tokens 
+    perplexity = torch.exp(torch.tensor(avg_nll)).item()
+    return perplexity
