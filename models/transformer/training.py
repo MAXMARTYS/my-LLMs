@@ -9,7 +9,8 @@ import torch.nn as nn
 import os 
 import tempfile
 
-from transformer import LLM
+from models.transformer.transformer import LLM
+from utils import calculate_perplexity
 
 # Extend each sequence length to 512 (max length)
 def collate_batch(batch):

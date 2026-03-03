@@ -2,10 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import AutoModel
-from torchinfo import summary
 
-# TODO: 
-# - think about using CUDA kernel tricks to speed up the training process
+from tqdm import tqdm
 
 class TokenEmbedding(nn.Module):
     def __init__(self, pretrained=False, vocab_size=50257, embed_dim=None):
@@ -94,44 +92,37 @@ class MambaBlock(nn.Module):
         out = x + out # Residual connection
         return out
 
-class MambaModel(nn.Module):
-    def __init__(self, d_model, d_hidden, n_blocks):
-        super().__init__()
-        self.embedding = TokenEmbedding(pretrained=False, embed_dim=d_model)
-        vocab_size, embed_dim = self.embedding.get_info()
+def calculate_perplexity(model, dataloader, device, max_batches, ignore_index=0):
+    total_loss = 0.0
+    total_tokens = 0
+    n_batches = 0
 
-        self.blocks = nn.ModuleList([
-            MambaBlock(d_model, d_hidden) for _ in range(n_blocks)
-        ])
+    criterion = torch.nn.CrossEntropyLoss(ignore_index=ignore_index, reduction='sum')
+    batch_size = next(iter(dataloader))['input_ids'].shape[0]
 
-        self.norm = nn.LayerNorm(d_model)
-        self.head = nn.Linear(d_model, vocab_size, bias=False)
+    with torch.no_grad():
+        for batch in tqdm(dataloader, desc='Calculating perplexity', total=max_batches//batch_size):
+            input_ids = batch['input_ids'].to(device)
 
-        self.head.weight = self.embedding.embed.weight
-        # self.head.weight.requires_grad = False  # Keep frozen
+            inputs  = input_ids[:, :-1].contiguous()
+            targets = input_ids[:, 1:].contiguous()
 
-    def forward(self, x):
-        x = self.embedding(x)
-        
-        for block in self.blocks:
-            x = block(x)
+            logits = model(inputs)
+            logits = logits.reshape(-1, logits.size(-1))
+            targets = targets.reshape(-1)
 
-        x = self.norm(x)
-        out = self.head(x)
+            loss = criterion(logits, targets)
 
-        return out
-    
-    @torch.no_grad()
-    def generate(self):
-        pass
+            # Count non-padding tokens only
+            non_pad = (targets != ignore_index).sum().item()
+            total_loss += loss.item()
+            total_tokens += non_pad
 
+            n_batches += batch_size
 
-if __name__=='__main__':
-    # Check if there are no initialization errors
-    model = MambaModel(d_model=512, d_hidden=2048, n_blocks=6)
-    summary(
-        model, 
-        input_size=(2, 512),  # (batch_size, seq_len)
-        dtypes=[torch.long],  # Specify integer type
-    )
-    print('Everything works!')
+            if n_batches >= max_batches:
+                break
+
+    avg_nll = total_loss / total_tokens 
+    perplexity = torch.exp(torch.tensor(avg_nll)).item()
+    return perplexity
