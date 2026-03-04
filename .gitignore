@@ -15,3 +15,9 @@ tokenized_wiki.zip
 
 # Testing notebook
 dataset.ipynb
+
+# Checkpoints
+models/transformer/training/checkpoint.pt
+models/mamba/training/checkpoint.pt
+models/xlstm/training/checkpoint.pt
+models/hyena/training/checkpoint.pt

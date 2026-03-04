@@ -1,49 +1,7 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from transformers import AutoModel
-from torchinfo import summary
 
-# Code for block diagonal and causal conv taken from this repo:
-# https://github.com/styalai/xLSTM-pytorch
-
-# I am still afraid that these modules are wrong with my implementation
-class BlockDiagonal(nn.Module):
-    def __init__(self, in_features, out_features, num_blocks, bias=True):
-        super().__init__()
-        self.in_features = in_features
-        self.out_features = out_features
-        self.num_blocks = num_blocks
-
-        assert out_features % num_blocks == 0
-        
-        block_out_features = out_features // num_blocks
-        
-        self.blocks = nn.ModuleList([
-            nn.Linear(in_features, block_out_features, bias=bias)
-            for _ in range(num_blocks)
-        ])
-
-    def forward(self, x):
-        x = [block(x) for block in self.blocks]
-        x = torch.cat(x, dim=-1)
-        return x
-
-class CausalConv1D(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, dilation=1, **kwargs):
-        super().__init__()
-        self.padding = (kernel_size - 1) * dilation
-        if self.padding <= 0:
-            self.padding = 1
-        self.conv = nn.Conv1d(in_channels, out_channels, kernel_size, padding=self.padding, dilation=dilation, **kwargs)
-
-    def forward(self, x):
-        x = self.conv(x)
-        return x[:, :, :-self.padding]
-
-class Swish(nn.Module):
-    def forward(self, x):
-        return x * torch.sigmoid(x)
+from utils import BlockDiagonal, CausalConv1D, Swish
 
 class sLSTMblock(nn.Module):
     def __init__(self, d_hidden, n_heads):
@@ -238,26 +196,3 @@ class mLSTMblock(nn.Module):
         out = out + x # Second skip connection
 
         return h_seq, (h, c, n, m)
-
-class xLSTM:
-    def __init__(self):
-        pass 
-
-    def forward():
-        pass 
-
-    @torch.no_grad()
-    def generate():
-        pass
-
-if __name__=='__main__':
-    slstm = sLSTMblock(d_hidden=128, n_heads=4)
-    dummy_x = torch.randn(2, 10, 128)
-    out, state = slstm(dummy_x)
-    print('sLSTM output shape:', out.shape)
-    summary(
-        slstm, 
-        input_size=dummy_x.shape,  # (batch_size, seq_len)
-        dtypes=[torch.float],  # Specify integer type
-    )
-    print('Everything works!')
