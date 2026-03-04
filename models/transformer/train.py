@@ -1,6 +1,7 @@
 from datasets import load_from_disk
 from matplotlib.pyplot import step
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
+from tqdm import tqdm
 from torch.nn.utils.rnn import pad_sequence
 import torch
 import torch.nn as nn
@@ -8,9 +9,8 @@ import torch.nn as nn
 import os 
 import tempfile
 import json
-from tqdm import tqdm
 
-from models.transformer.transformer import LLM
+from transformer import LLM
 from utils import calculate_perplexity
 
 # Extend each sequence length to 512 (max length)
@@ -55,16 +55,40 @@ def load_checkpoint(path, model, opt, device):
     total_batches_seen = ckpt['total_batches_seen']
     return epoch, batch, total_batches_seen
 
+def log_metrics(metrics_path, record: dict):
+    os.makedirs(os.path.dirname(metrics_path), exist_ok=True)
+    with open(metrics_path, 'a') as file:
+        file.write(json.dumps(record) + '\n')
+
 def train(epochs=1):
     # Load dataset
     dataset = load_from_disk('tokenized_wiki')
     dataset.set_format(type='torch', columns=['input_ids', 'attention_mask'])
 
-    train_loader = DataLoader(dataset['train'], batch_size=16, shuffle=False, collate_fn=collate_batch,)
+    val_batches = 500 
+    batch_size = 16
+    val_cutoff = val_batches * batch_size # 8000 samples in the val dataset
+
+    full_train = dataset['train']
+    val_subset = Subset(full_train, range(val_cutoff))
+    train_subset = Subset(full_train, range(val_cutoff, len(full_train)))
+
+    train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=False,collate_fn=collate_batch)
+    val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False,collate_fn=collate_batch)
 
     # Model, loss, optimizer
     model = LLM(depth=4, num_heads=8)
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    if torch.cuda.is_available():
+        device = torch.device('cuda')
+        torch.backends.cuda.matmul.allow_32f = True
+        torch.backends.cudnn.benchmark = True
+    elif torch.backends.mps.is_available():
+        device = torch.device('mps')
+    else:
+        device = torch.device('cpu')
+    print(f'Using device {device}')
+
     model.to(device)
 
     padding_value = 0
@@ -76,7 +100,8 @@ def train(epochs=1):
     start_batch = 0
     total_batches_seen = 0
 
-    checkpoint_path = 'transformer_checkpoints/checkpoint.pt'
+    checkpoint_path = 'models/transformer/training/checkpoint.pt'
+    metrics_path = 'models/transformer/training/metrics.jsonl'
     save_every = 2000 # How often to save checkpoints
 
     if os.path.exists(checkpoint_path):
@@ -88,6 +113,9 @@ def train(epochs=1):
 
     for epoch in range(start_epoch, epochs):
         print(f'Epoch {epoch+1}/{epochs}')
+
+        running_loss = 0.0
+        running_tokens = 0
 
         pbar = tqdm(train_loader, desc='Training', leave=True)
 
@@ -113,11 +141,43 @@ def train(epochs=1):
 
             total_batches_seen += 1
 
+            non_pad = (targets != padding_value).sum().item()
+            running_loss += loss.item() * non_pad
+            running_loss += non_pad
+
             pbar.set_postfix(loss=loss.item())
 
             if total_batches_seen % save_every == 0:
                 print(f'Saving checkpoint at epoch {epoch}, batch {batch_idx}...')
                 save_checkpoint(checkpoint_path, model, optimizer, epoch, batch_idx, total_batches_seen)
+
+                model.eval()
+
+                avg_train_nll = running_loss / max(running_tokens, 1)
+                train_ppl = torch.exp(torch.tensor(avg_train_nll)).item() # In torch: Perplexity = exp(CrossEntropyLoss)
+                train_loss_avg = avg_train_nll
+
+                val_ppl = calculate_perplexity(model, val_loader, device, max_batches=val_batches*batch_size)
+
+                record = {
+                    'step': total_batches_seen,
+                    'epoch': epoch,
+                    'train_loss': train_loss_avg,
+                    'train_perplexity': train_ppl,
+                    'val_perplexity': val_ppl
+                }
+                log_metrics(metrics_path, record)
+                print(
+                    f'[step {total_batches_seen}] '
+                    f'train_loss={train_loss_avg:.4f}  '
+                    f'train_ppl={train_ppl:.2f}  '
+                    f'val_ppl={val_ppl:.2f}'
+                )
+
+                # Exit the eval state & reset metrics
+                running_loss   = 0.0
+                running_tokens = 0
+                model.train()
 
     torch.save('transformer_model.pt')
 
