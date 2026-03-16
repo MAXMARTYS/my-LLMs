@@ -6,7 +6,7 @@ from torchinfo import summary
 
 from utils import TokenEmbedding, TransformerBlock
 
-class LLM(nn.Module):
+class Transformer(nn.Module):
     def __init__(self, depth, num_heads):
         super().__init__()
 
@@ -62,7 +62,7 @@ class LLM(nn.Module):
     
 if __name__=='__main__':
     # Check if there are no initialization errors
-    model = LLM(num_heads=8, depth=6)
+    model = Transformer(num_heads=8, depth=6)
     summary = summary(
         model, 
         input_size=(2, 512),  # (batch_size, seq_len)

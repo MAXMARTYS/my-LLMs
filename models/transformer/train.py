@@ -10,7 +10,7 @@ import os
 import tempfile
 import json
 
-from transformer import LLM
+from transformer import Transformer
 from utils import calculate_perplexity
 
 # Extend each sequence length to 512 (max length)
@@ -77,7 +77,7 @@ def train(epochs=1):
     val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False,collate_fn=collate_batch)
 
     # Model, loss, optimizer
-    model = LLM(depth=4, num_heads=8)
+    model = Transformer(depth=4, num_heads=8)
 
     if torch.cuda.is_available():
         device = torch.device('cuda')
