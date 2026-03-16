@@ -1,5 +1,4 @@
 from datasets import load_from_disk
-from matplotlib.pyplot import step
 from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 from torch.nn.utils.rnn import pad_sequence
@@ -143,7 +142,7 @@ def train(epochs=1):
 
             non_pad = (targets != padding_value).sum().item()
             running_loss += loss.item() * non_pad
-            running_loss += non_pad
+            running_tokens += non_pad
 
             pbar.set_postfix(loss=loss.item())
 
@@ -179,7 +178,7 @@ def train(epochs=1):
                 running_tokens = 0
                 model.train()
 
-    torch.save('transformer_model.pt')
+    torch.save(model.state_dict(), 'transformer_model.pt')
 
 if __name__=='__main__':
     train()
