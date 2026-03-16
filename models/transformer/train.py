@@ -76,7 +76,7 @@ def train(epochs=1):
     val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False,collate_fn=collate_batch)
 
     # Model, loss, optimizer
-    model = Transformer(depth=4, num_heads=8)
+    model = Transformer(depth=6, num_heads=8)
 
     if torch.cuda.is_available():
         device = torch.device('cuda')
