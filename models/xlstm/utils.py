@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from transformers import AutoModel
 
 from tqdm import tqdm
 
@@ -43,6 +44,31 @@ class CausalConv1D(nn.Module):
 class Swish(nn.Module):
     def forward(self, x):
         return x * torch.sigmoid(x)
+    
+class TokenEmbedding(nn.Module):
+    def __init__(self, pretrained=False, vocab_size=50257, embed_dim=None):
+        super().__init__()
+
+        if pretrained:
+            gpt2 = AutoModel.from_pretrained('gpt2')
+            embedding = gpt2.get_input_embeddings().weight.detach().clone()
+            self.vocab_size, self.embed_dim = embedding.shape
+
+            self.embed = nn.Embedding(self.vocab_size, self.embed_dim)
+            self.embed.weight = nn.Parameter(embedding)
+
+            self.embed.weight.requires_grad = False 
+
+        else:
+            self.embed = nn.Embedding(vocab_size, embed_dim)
+            self.vocab_size = vocab_size
+            self.embed_dim = embed_dim
+
+    def get_info(self):
+        return self.vocab_size, self.embed_dim
+
+    def forward(self, x):
+        return self.embed(x)
 
 def calculate_perplexity(model, dataloader, device, max_batches, ignore_index=0):
     total_loss = 0.0
