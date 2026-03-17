@@ -195,4 +195,4 @@ class mLSTMblock(nn.Module):
         out = self.last_linear(h)
         out = out + x # Second skip connection
 
-        return h_seq, (h, c, n, m)
+        return out, (h, c, n, m)
