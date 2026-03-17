@@ -28,21 +28,54 @@ The models were trained online via vast.ai.
 
 To run the training on vast.ai run following commands in jupyter terminal on pytorch instance:
 
+Clone repository and set the directory.
+
 ```shell
 git clone https://github.com/MAXMARTYS/my-LLMs.git
 
 cd my-LLMs
+```
 
-pip3 install -r requirements.txt
+Install uv and set up virtual environment.
 
+```shell
+pip3 install uv 
+
+uv sync
+
+source .venv/bin/activate
+```
+
+Check cuda availability (optional).
+
+```shell
+python -c "
+import torch
+assert torch.cuda.is_available(), 'CUDA not available!'
+print(f'GPU: {torch.cuda.get_device_name(0)}')
+"
+```
+
+Download dataset from huggingface.
+
+```shell
 python -c "
 from datasets import load_dataset
+import sys
+print('Downloading dataset...')
 ds = load_dataset('Maxmartys/tokenized-wiki')
-ds['train'].save_to_disk('tokenized_wiki')
-"
-
-python3 models/{model_dir}/train.py
+ds.save_to_disk('tokenized_wiki')
+print(f'Done. {len(ds)} samples saved.')
+" || { echo 'Dataset download failed'; exit 1; }
 ```
+
+Start training.
+
+```shell
+MODEL_DIR="transformer"
+python3 models/$MODEL_DIR/train.py
+```
+
 
 # Evaluation
 
