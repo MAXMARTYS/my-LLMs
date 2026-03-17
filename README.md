@@ -7,10 +7,17 @@ An ongoaing hobby project exploring post-transformer language model architecture
 | Status                  | Architecture             |
 |-------------------------|--------------------------|
 | Implemented             | Transformer, Mamba (SSM) |
-|-------------------------|--------------------------|
 | In Implementation       | xLSTM                    |
-|-------------------------|--------------------------|
 | Planned Implementations | Hyena (H3)               |
+
+If you want to read more about specific models, please check these papers:
+
+| Models | Title |
+|--------|-------|
+| Transformer | Attention Is All You Need |
+| Mamba | Mamba: Linear-Time Sequence Modeling with Selective State Spaces |
+| xLSTM | xLSTM: Extended Long Short-Term Memory |
+| Hyena | Hyena Hierarchy: Towards Larger Convolutional Language Models |
 
 # Data & training
 
