@@ -72,7 +72,12 @@ def train(epochs=1):
     val_subset = Subset(full_train, range(val_cutoff))
     train_subset = Subset(full_train, range(val_cutoff, len(full_train)))
 
-    train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=False,collate_fn=collate_batch)
+    train_loader = DataLoader(
+        train_subset, 
+        batch_size=batch_size, 
+        shuffle=False,
+        collate_fn=collate_batch,
+        pin_memory=True)
     val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False,collate_fn=collate_batch)
 
     # Model, loss, optimizer
@@ -80,7 +85,8 @@ def train(epochs=1):
 
     if torch.cuda.is_available():
         device = torch.device('cuda')
-        torch.backends.cuda.matmul.allow_32f = True
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True    
         torch.backends.cudnn.benchmark = True
     elif torch.backends.mps.is_available():
         device = torch.device('mps')
@@ -128,13 +134,14 @@ def train(epochs=1):
             inputs  = input_ids[:, :-1].contiguous()
             targets = input_ids[:, 1:].contiguous()
 
+            optimizer.zero_grad()
+
             logits = model(inputs)
             logits = logits.reshape(-1, logits.size(-1))
             targets = targets.reshape(-1)
 
             loss = criterion(logits, targets)
 
-            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
