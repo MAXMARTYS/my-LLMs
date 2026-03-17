@@ -4,11 +4,13 @@ An ongoaing hobby project exploring post-transformer language model architecture
 
 # Models implemented
 
+| Status                  | Architecture             |
+|-------------------------|--------------------------|
 | Implemented             | Transformer, Mamba (SSM) |
 |-------------------------|--------------------------|
 | In Implementation       | xLSTM                    |
-<!-- |-------------------------|--------------------------| -->
-| Planned Implementations | Hyena (H3) |
+|-------------------------|--------------------------|
+| Planned Implementations | Hyena (H3)               |
 
 # Data & training
 
