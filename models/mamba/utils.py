@@ -45,19 +45,32 @@ class SSM(nn.Module):
         self.delta = nn.Linear(d_model, d_hidden)
 
     def forward(self, x):
+        B_seq, T, _ = x.shape
 
         delta = F.softplus( self.delta(x) )
+        A_bar = torch.exp( delta * -F.softplus(self.A) )
 
-        # A_t = self.A(x)
-        A_bar = torch.exp( delta * self.A )
-
-        # B_x = self.B(x)
         B_bar = delta * self.B(x)
 
         # New implementation - pytorch vectorization TODO: this may have an error
+        # A_cum = torch.cumprod(A_bar, dim=1)
+        # h = torch.cumsum(B_bar / A_cum, dim=1) * A_cum
+
         A_cum = torch.cumprod(A_bar, dim=1)
-        # h = torch.cumsum(B_x * A_cum, dim=1)
-        h = torch.cumsum(B_bar / A_cum, dim=1) * A_cum
+        A_cum_prev = torch.cat([
+            torch.ones(B_seq, 1, self.d_hidden, device=x.device, dtype=x.dtype),
+            A_cum[:, :-1, :]
+        ], dim=1)
+        B_pre = B_bar * A_cum_prev
+        h = A_cum * torch.cumsum(B_pre, dim=1)
+
+        # Normal loop implementation - for reference
+        # h = torch.zeros(B_seq, self.d_hidden, device=x.device, dtype=x.dtype)
+        # outs = []
+        # for t in range(T):
+        #     h = A_bar[:, t] * h + B_bar[:, t]
+        #     outs.append(h)
+        # h = torch.stack(outs, dim=1)
 
         out = self.C(h) + self.D(x)
         return out
@@ -78,6 +91,7 @@ class MambaBlock(nn.Module):
         self.ssm = SSM(d_model, d_hidden)
 
     def forward(self, x):
+        res = x
         x = self.linear1(x)
 
         x = self.conv( x.transpose(1, 2) ).transpose(1, 2)
@@ -89,7 +103,7 @@ class MambaBlock(nn.Module):
 
         z = x * x_res
         out = self.last_linear(z)
-        out = x + out # Residual connection
+        out = out + res # Residual connection
         return out
 
 def calculate_perplexity(model, dataloader, device, max_batches, ignore_index=0):

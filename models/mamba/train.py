@@ -110,8 +110,8 @@ def train(epochs=1):
     start_batch = 0
     total_batches_seen = 0
 
-    checkpoint_path = 'models/transformer/training/checkpoint.pt'
-    metrics_path = 'models/transformer/training/metrics.jsonl'
+    checkpoint_path = 'models/mamba/training/checkpoint.pt'
+    metrics_path = 'models/mamba/training/metrics.jsonl'
     save_every = 2000 # How often to save checkpoints
 
     if os.path.exists(checkpoint_path):
@@ -139,6 +139,8 @@ def train(epochs=1):
             inputs  = input_ids[:, :-1].contiguous()
             targets = input_ids[:, 1:].contiguous()
 
+            optimizer.zero_grad()
+
             logits = model(inputs)
             logits = logits.reshape(-1, logits.size(-1))
             targets = targets.reshape(-1)
@@ -146,7 +148,6 @@ def train(epochs=1):
             loss = criterion(logits, targets)
 
             loss.backward()
-            optimizer.zero_grad()
             optimizer.step()
 
             total_batches_seen += 1
