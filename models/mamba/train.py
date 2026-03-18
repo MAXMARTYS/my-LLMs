@@ -103,7 +103,7 @@ def train(epochs=1):
 
     padding_value = 0
     criterion = nn.CrossEntropyLoss(ignore_index=padding_value)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
 
     # Training loop
     start_epoch = 0 
@@ -148,6 +148,7 @@ def train(epochs=1):
             loss = criterion(logits, targets)
 
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0) # Gradient clipping
             optimizer.step()
 
             total_batches_seen += 1
