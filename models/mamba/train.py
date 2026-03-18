@@ -73,7 +73,12 @@ def train(epochs=1):
     val_subset = Subset(full_train, range(val_cutoff))
     train_subset = Subset(full_train, range(val_cutoff, len(full_train)))
 
-    train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=False,collate_fn=collate_batch)
+    train_loader = DataLoader(
+        train_subset, 
+        batch_size=batch_size, 
+        shuffle=False,
+        collate_fn=collate_batch,
+        pin_memory=True)
     val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False,collate_fn=collate_batch)
 
     # Model, loss, optimizer
@@ -85,7 +90,8 @@ def train(epochs=1):
 
     if torch.cuda.is_available():
         device = torch.device('cuda')
-        torch.backends.cuda.matmul.allow_32f = True
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True    
         torch.backends.cudnn.benchmark = True
     elif torch.backends.mps.is_available():
         device = torch.device('mps')
@@ -147,7 +153,7 @@ def train(epochs=1):
 
             non_pad = (targets != padding_value).sum().item()
             running_loss += loss.item() * non_pad
-            running_loss += non_pad
+            running_tokens += non_pad
 
             pbar.set_postfix(loss=loss.item())
 
@@ -183,7 +189,7 @@ def train(epochs=1):
                 running_tokens = 0
                 model.train()
 
-    torch.save('transformer_model.pt')
+    torch.save(model.state_dict(), 'transformer_model.pt')
 
 if __name__=='__main__':
     train()
