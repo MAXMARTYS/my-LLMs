@@ -47,8 +47,9 @@ class SSM(nn.Module):
     def forward(self, x):
         B_seq, T, _ = x.shape
 
-        delta = F.softplus( self.delta(x) )
-        A_bar = torch.exp( delta * -F.softplus(self.A) )
+        # There are some issues with gradients - I will clamp the values for now. TODO: investigate this further
+        delta = F.softplus( self.delta(x) ).clamp(max=10.0) 
+        A_bar = torch.exp( delta * -F.softplus(self.A) ).clamp(min=1e-6)
 
         B_bar = delta * self.B(x)
 
