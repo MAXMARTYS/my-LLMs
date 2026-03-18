@@ -32,7 +32,8 @@ Clone repository and set the directory.
 
 ```shell
 git clone https://github.com/MAXMARTYS/my-LLMs.git
-
+```
+```shell
 cd my-LLMs
 ```
 
@@ -40,9 +41,11 @@ Install uv and set up virtual environment.
 
 ```shell
 pip3 install uv 
-
+```
+```shell
 uv sync
-
+```
+```shell
 source .venv/bin/activate
 ```
 
@@ -65,11 +68,11 @@ import sys
 print('Downloading dataset...')
 ds = load_dataset('Maxmartys/tokenized-wiki')
 ds.save_to_disk('tokenized_wiki')
-print(f'Done. {len(ds)} samples saved.')
+print(f'Done. {len(ds['train'])} samples saved.')
 " || { echo 'Dataset download failed'; exit 1; }
 ```
 
-Start training.
+Start training. Set MODEL_DIR to any model from the repo.
 
 ```shell
 MODEL_DIR="transformer"
