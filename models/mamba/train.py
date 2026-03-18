@@ -145,8 +145,8 @@ def train(epochs=1):
 
             loss = criterion(logits, targets)
 
-            optimizer.zero_grad()
             loss.backward()
+            optimizer.zero_grad()
             optimizer.step()
 
             total_batches_seen += 1
