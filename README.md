@@ -6,19 +6,19 @@ An ongoaing hobby project exploring post-transformer language model architecture
 
 | Status                  | Architecture             |
 |-------------------------|--------------------------|
-| Implemented             | Transformer              |
-| In Implementation       | xLSTM, Mamba (SSM), KAT  |
-| Planned Implementations | Hyena (H3), RetNet       |
+| Implemented             | Transformer, KAT |
+| In Implementation       | xLSTM, Mamba (SSM) |
+| Planned Implementations | Hyena (H3), RetNet |
 
 If you want to read more about specific models, please check these papers:
 
 | Models | Title |
 |--------|-------|
 | Transformer | Attention Is All You Need |
+| KAT | Kolmogorov-Arnold Transformer |
 | Mamba | Mamba: Linear-Time Sequence Modeling with Selective State Spaces |
 | xLSTM | xLSTM: Extended Long Short-Term Memory |
 | Hyena | Hyena Hierarchy: Towards Larger Convolutional Language Models |
-| KAT | Kolmogorov-Arnold Transformer |
 | RetNet | Retentive Network: A Successor to Transformer for Large Language Models | 
 
 # Data & training
@@ -31,7 +31,7 @@ The models were trained online via vast.ai. With NVIDIA RTX 3090 (24 GB, ~35 TFL
 ### To run the training on vast.ai run following commands in jupyter terminal on pytorch instance:
 
 ```shell
-bash <(curl -s https://raw.githubusercontent.com/MAXMARTYS/my-LLMs/main/setup.sh)
+bash <(curl -s https://raw.githubusercontent.com/MAXMARTYS/my-LLMs/vastai_setup/setup.sh)
 ```
 
 ### Or you can do that manually using the following commands one by one:
