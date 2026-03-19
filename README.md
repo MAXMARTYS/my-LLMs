@@ -31,7 +31,7 @@ The models were trained online via vast.ai. With NVIDIA RTX 3090 (24 GB, ~35 TFL
 ### To run the training on vast.ai run following commands in jupyter terminal on pytorch instance:
 
 ```shell
-bash <(curl -s https://raw.githubusercontent.com/MAXMARTYS/my-LLMs/vastai_setup/setup.sh)
+curl -s https://raw.githubusercontent.com/MAXMARTYS/my-LLMs/vastai_setup/setup.sh
 ```
 
 ### Or you can do that manually using the following commands one by one:
