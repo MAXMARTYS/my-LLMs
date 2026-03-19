@@ -6,9 +6,9 @@ An ongoaing hobby project exploring post-transformer language model architecture
 
 | Status                  | Architecture             |
 |-------------------------|--------------------------|
-| Implemented             | Transformer, Mamba (SSM) |
-| In Implementation       | xLSTM                    |
-| Planned Implementations | Hyena (H3)               |
+| Implemented             | Transformer              |
+| In Implementation       | xLSTM, Mamba (SSM), KAT  |
+| Planned Implementations | Hyena (H3), RetNet       |
 
 If you want to read more about specific models, please check these papers:
 
@@ -18,22 +18,28 @@ If you want to read more about specific models, please check these papers:
 | Mamba | Mamba: Linear-Time Sequence Modeling with Selective State Spaces |
 | xLSTM | xLSTM: Extended Long Short-Term Memory |
 | Hyena | Hyena Hierarchy: Towards Larger Convolutional Language Models |
+| KAT | Kolmogorov-Arnold Transformer |
+| RetNet | Retentive Network: A Successor to Transformer for Large Language Models | 
 
 # Data & training
 
 The models were trained on wikipedia 2 dataset, tokenized with gpt-2 tokenizer. Tokenized version of the dataset can be found here:
 https://huggingface.co/datasets/Maxmartys/tokenized-wiki 
 
-The models were trained online via vast.ai. 
+The models were trained online via vast.ai. With NVIDIA RTX 3090 (24 GB, ~35 TFLOPs). New NVIDIA GPUs (like 5090) are incompatible with CUDA version used in this project (11.8). 
 
-To run the training on vast.ai run following commands in jupyter terminal on pytorch instance:
+### To run the training on vast.ai run following commands in jupyter terminal on pytorch instance:
+
+```shell
+bash <(curl -s https://raw.githubusercontent.com/MAXMARTYS/my-LLMs/main/setup.sh)
+```
+
+### Or you can do that manually using the following commands one by one:
 
 Clone repository and set the directory.
 
 ```shell
 git clone https://github.com/MAXMARTYS/my-LLMs.git
-```
-```shell
 cd my-LLMs
 ```
 
@@ -41,11 +47,8 @@ Install uv and set up virtual environment.
 
 ```shell
 pip3 install uv 
-```
-```shell
 uv sync
-```
-```shell
+
 source .venv/bin/activate
 ```
 
@@ -79,7 +82,14 @@ MODEL_DIR="transformer"
 python3 models/$MODEL_DIR/train.py
 ```
 
+# Download models
+
+All trained models can be found on my huggingface account:
+https://huggingface.co/Maxmartys 
+
+The models will be named following a convention of '{MODEL_NAME}_{PARAM_COUNT}_wikipedia-2'.
 
 # Evaluation
 
 TBA
+ 
