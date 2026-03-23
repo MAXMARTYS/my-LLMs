@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from transformers import AutoModel
 from torchinfo import summary
 
-from .utils import TokenEmbedding, MambaBlock
+from utils import TokenEmbedding, MambaBlock
 
 class MambaModel(nn.Module):
     def __init__(self, d_model, d_hidden, n_blocks):
@@ -23,6 +23,7 @@ class MambaModel(nn.Module):
         # self.head.weight.requires_grad = False  # Keep frozen
 
     def forward(self, x):
+        
         x = self.embedding(x)
         
         for block in self.blocks:

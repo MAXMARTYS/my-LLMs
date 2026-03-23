@@ -103,7 +103,7 @@ def train(epochs=1):
 
     padding_value = 0
     criterion = nn.CrossEntropyLoss(ignore_index=padding_value)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=5e-5)
 
     # Training loop
     start_epoch = 0 

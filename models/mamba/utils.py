@@ -38,47 +38,71 @@ class SSM(nn.Module):
         self.d_hidden = d_hidden
 
         # self.A = nn.Linear(d_model, d_hidden) # Hidden value updater
-        self.A = nn.Parameter(torch.randn(d_hidden))
+        # self.A = nn.Parameter(torch.randn(d_hidden))
+        self.A = nn.Parameter(torch.log(torch.arange(1, d_hidden + 1).float()))
         self.B = nn.Linear(d_model, d_hidden) # Input - hidden state translation 
         self.C = nn.Linear(d_hidden, d_model) # Hidden state - output translation
         self.D = nn.Linear(d_model, d_model) # Skip connection
         self.delta = nn.Linear(d_model, d_hidden)
 
     def forward(self, x):
-        B_seq, T, _ = x.shape
+        ''' 
+        This is a new implementation that moves the computation into the log-space. This should prevent gradient explosion.
+        It works on an assumption that cumprod(exp(A) = exp(cumsum(A))
+        '''
+        B_seq, T, C = x.shape
 
-        # There are some issues with gradients - I will clamp the values for now. TODO: investigate this further
-        delta = F.softplus( self.delta(x) ).clamp(max=10.0) 
-        A_bar = torch.exp( delta * -F.softplus(self.A) ).clamp(min=1e-6)
+        delta = F.softplus( self.delta(x) )
+        A_log = -F.softplus(self.A)
+        A_bar_log = delta * A_log
 
         B_bar = delta * self.B(x)
 
-        # New implementation - pytorch vectorization TODO: this may have an error
-        # A_cum = torch.cumprod(A_bar, dim=1)
-        # h = torch.cumsum(B_bar / A_cum, dim=1) * A_cum
+        A_log_cum = torch.cumsum(A_bar_log, dim=1).clamp(min=-20, max=20)
 
-        A_cum = torch.cumprod(A_bar, dim=1)
-        A_cum_prev = torch.cat([
-            torch.ones(B_seq, 1, self.d_hidden, device=x.device, dtype=x.dtype),
-            A_cum[:, :-1, :]
-        ], dim=1)
-        B_pre = B_bar * A_cum_prev
-        h = A_cum * torch.cumsum(B_pre, dim=1)
-
-        # Normal loop implementation - for reference
-        # h = torch.zeros(B_seq, self.d_hidden, device=x.device, dtype=x.dtype)
-        # outs = []
-        # for t in range(T):
-        #     h = A_bar[:, t] * h + B_bar[:, t]
-        #     outs.append(h)
-        # h = torch.stack(outs, dim=1)
+        B_shift = B_bar * torch.exp(-A_log_cum)
+        h = torch.exp(A_log_cum) * torch.cumsum(B_shift, dim=1)
 
         out = self.C(h) + self.D(x)
         return out
 
+    # def forward(self, x):
+    #     B_seq, T, _ = x.shape
+
+    #     # There are some issues with gradients - I will clamp the values for now. TODO: investigate this further
+    #     delta = F.softplus( self.delta(x) ).clamp(max=10.0) 
+    #     A_bar = torch.exp( delta * -F.softplus(self.A) ).clamp(min=1e-6)
+
+    #     B_bar = delta * self.B(x)
+
+    #     # New implementation - pytorch vectorization TODO: this may have an error
+    #     # A_cum = torch.cumprod(A_bar, dim=1)
+    #     # h = torch.cumsum(B_bar / A_cum, dim=1) * A_cum
+
+    #     A_cum = torch.cumprod(A_bar, dim=1)
+    #     A_cum_prev = torch.cat([
+    #         torch.ones(B_seq, 1, self.d_hidden, device=x.device, dtype=x.dtype),
+    #         A_cum[:, :-1, :]
+    #     ], dim=1)
+    #     B_pre = B_bar * A_cum_prev
+    #     h = A_cum * torch.cumsum(B_pre, dim=1)
+
+    #     # Normal loop implementation - for reference
+    #     # h = torch.zeros(B_seq, self.d_hidden, device=x.device, dtype=x.dtype)
+    #     # outs = []
+    #     # for t in range(T):
+    #     #     h = A_bar[:, t] * h + B_bar[:, t]
+    #     #     outs.append(h)
+    #     # h = torch.stack(outs, dim=1)
+
+    #     out = self.C(h) + self.D(x)
+    #     return out
+
 class MambaBlock(nn.Module):
     def __init__(self, d_model, d_hidden):
         super().__init__()
+        self.norm = nn.RMSNorm(d_model)
+
         self.d_model = d_model
         self.d_hidden = d_hidden
 
@@ -93,6 +117,7 @@ class MambaBlock(nn.Module):
 
     def forward(self, x):
         res = x
+        x = self.norm(x)
         x = self.linear1(x)
 
         x = self.conv( x.transpose(1, 2) ).transpose(1, 2)
