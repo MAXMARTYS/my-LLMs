@@ -97,15 +97,22 @@ The training curves and perplexities are shown on the image below. First few ste
 ![Training Curves](figures/training_curves.png)
  
 ### Tests
-The samples of generated text for the prompt of 'The capital of France is' (temperature=1.0, max_tokens=100):
+The samples of generated text for the prompt of 'The capital of France is' (temperature=1.0, max_tokens=100). It is crucial to remember that models this small, without fine-tuning will mostly return factually nonsensical answers. This test allows to check the syntactic understanding of an English language. 
 
-| Models | Title |
-|--------|-------|
-| Transformer | The capital of France is the capital of the Thérault region of eastern France. It is located between Paris-sur-Marne and Rennes-sur-Marne. The city also includes 49 communes succeeding Châtillon.
+<details>
+<summary><b>Transformer</b></summary>
+
+> The capital of France is the capital of the Thérault region of eastern France. It is located between Paris-sur-Marne and Rennes-sur-Marne. The city also includes 49 communes succeeding Châtillon.
 
 Governance
-It is a core administrative division between former Thérault communes and French departments of about 50 municipalities. Its capital is the city of Thérault in the Thérault district of Paris. Today is a municipal district of Th |
-| KAT | The capital of France is the province of France.
+It is a core administrative division between former Thérault communes and French departments of about 50 municipalities. Its capital is the city of Thérault in the Thérault district of Paris. Today is a municipal district of Th
+
+</details>
+
+<details>
+<summary><b>KAT</b></summary>
+
+> The capital of France is the province of France.
 
 
 The capital of France is located in Ville, between the actions of the Minister-Staffour Noué (SP), the corrupt businessman-order of a municipality.
@@ -120,8 +127,6 @@ Populated places in Ville
 Demiety of France
 Forts, sites in France
  Bancates, ruins of the city of Pôlvin
-Former municipalities of France |
-| Mamba |  |
-| xLSTM |  |
-| Hyena |  |
-| RetNet |  | 
+Former municipalities of France
+
+</details>
