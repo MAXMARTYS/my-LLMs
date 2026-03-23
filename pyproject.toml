@@ -8,18 +8,16 @@ dependencies = [
     "jupyterlab",
     "ipykernel",
     "jupyter>=1.1.1",
-
     "numpy",
     "matplotlib",
-
     "torch==2.7.*",
     "torchvision==0.22.*",
     "torchaudio==2.7.*",
     "torchinfo",
-
     "transformers",
     "datasets",
     "accelerate",
+    "mauve-text>=0.4.0",
 ]
 
 [[tool.uv.index]]

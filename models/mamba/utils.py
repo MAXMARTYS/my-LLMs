@@ -118,18 +118,20 @@ class MambaBlock(nn.Module):
     def forward(self, x):
         res = x
         x = self.norm(x)
-        x = self.linear1(x)
 
-        x = self.conv( x.transpose(1, 2) ).transpose(1, 2)
-        x = self.act(x)
-        x = self.ssm(x)
+        # SSM path
+        x_ssm = self.linear1(x) 
+        x_ssm = self.conv(x_ssm.transpose(1, 2)).transpose(1, 2)
+        x_ssm = self.act(x_ssm) 
+        x_ssm = self.ssm(x_ssm)
 
-        x_res = self.linear2(x)
-        x_res = self.act(x_res)
+        # Gated path
+        z = self.linear2(x)
+        z = self.act(z)
 
-        z = x * x_res
-        out = self.last_linear(z)
-        out = out + res # Residual connection
+        combined = x_ssm * z
+        out = self.last_linear(combined)
+        out = out + res
         return out
 
 def calculate_perplexity(model, dataloader, device, max_batches, ignore_index=0):

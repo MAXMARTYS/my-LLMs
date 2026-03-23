@@ -23,4 +23,4 @@ models/mamba/training/checkpoint.pt
 models/xlstm/training/checkpoint.pt
 models/hyena/training/checkpoint.pt
 
-eval/
+# Files in implementation

@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from transformers import AutoModel
 from torchinfo import summary
 
-from .utils import TokenEmbedding, KATBlock
+from utils import TokenEmbedding, KATBlock
 
 class KAT(nn.Module):
     def __init__(self, depth, num_heads, m=4, n=3, groups=8):
