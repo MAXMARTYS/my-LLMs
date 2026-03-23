@@ -7,9 +7,11 @@ requires-python = ">=3.11,<3.13"
 dependencies = [
     "jupyterlab",
     "ipykernel",
+    "jupyter>=1.1.1",
 
     "numpy",
     "matplotlib",
+
     "torch==2.7.*",
     "torchvision==0.22.*",
     "torchaudio==2.7.*",
@@ -17,7 +19,7 @@ dependencies = [
 
     "transformers",
     "datasets",
-    "accelerate"
+    "accelerate",
 ]
 
 [[tool.uv.index]]
@@ -45,5 +47,10 @@ torchvision = [
 ]
 torchaudio = [
   { index = "pytorch-cu118", marker = "sys_platform == 'win32' or sys_platform == 'linux'" },
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.1.0",
 ]
 

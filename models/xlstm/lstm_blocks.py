@@ -56,7 +56,8 @@ class sLSTMblock(nn.Module):
 
         c_next = f * c + i * z
         n_next = f * n + i
-        h_next = o * ( c_next / (n_next + epsilon) )
+        # h_next = o * ( c_next / (n_next + epsilon) )
+        h_next = o * (c_next / torch.clamp(torch.abs(n_next), min=epsilon))
 
         return h_next, c_next, n_next, m_next
     
@@ -77,7 +78,7 @@ class sLSTMblock(nn.Module):
         x_if = self.swish( self.conv(x_conv).transpose(1, 2) ) # Input for i and f gates
         x_if = self.dropout(x_if)
 
-        x_zo = x # Input for z and o gates
+        x_zo = x_norm # Input for z and o gates
 
         hs = []
         for t in range(T):
@@ -123,11 +124,13 @@ class mLSTMblock(nn.Module):
 
         self.left_linear = nn.Linear(d_hidden, int(d_hidden*2))
         self.right_linear = nn.Linear(d_hidden, int(d_hidden*2))
-        self.last_linear = nn.Linear(int(d_hidden*0.5), d_hidden)
+        self.last_linear = nn.Linear(int(d_hidden*2), d_hidden)
 
         self.gelu = nn.GELU()
         self.swish = Swish()
         self.dropout = nn.Dropout(0.2)
+
+        self.scale = float(d_hidden) ** -0.5
 
     def step(self, x, x_trans, c, n, m, epsilon=1e-8):
         
@@ -136,7 +139,8 @@ class mLSTMblock(nn.Module):
         o_bar = self.W_o(x) # Output gate
 
         q = self.W_q(x_trans) # Query
-        k = (1 / torch.sqrt(self.d_hidden)) * self.W_k(x_trans) # Key
+        # k = (1 / torch.sqrt(self.d_hidden)) * self.W_k(x_trans) # Key
+        k = self.scale * self.W_k(x_trans) # Key
         v = self.W_v(x) # Value
 
         m_next = torch.maximum( f_bar + m, i_bar ) # We can also use log(f) and log(i)
@@ -152,8 +156,9 @@ class mLSTMblock(nn.Module):
         # Still no idea why we compute the hidden state in mLSTM
         cq = c_next @ q.unsqueeze(-1)
         cq = cq.squeeze(-1)
-        denominator = torch.maximum(torch.abs(n_next * q).sum(-1, keepdim=True), torch.ones_like(n_next[:, :1]))
-        h_bar = cq / (denominator + epsilon)
+        denom = torch.abs((n_next * q).sum(-1, keepdim=True)) 
+        denom = torch.maximum(denom, torch.ones_like(denom))
+        h_bar = cq / (denom + epsilon)
         h = o * h_bar
 
         return h, c_next, n_next, m_next
@@ -164,9 +169,9 @@ class mLSTMblock(nn.Module):
 
         if state is None:
             h = x.new_zeros(B, D)
-            c = x.new_zeros(B, D)
+            c = x.new_zeros(B, D, D)
             n = x.new_zeros(B, D)
-            m = x.new_zeros(B, D)
+            m = x.new_zeros(B, 1)
         else:
             h, c, n, m = state
 
@@ -190,6 +195,7 @@ class mLSTMblock(nn.Module):
         h_gn = h_gn + x_trans # First skip connection
 
         x_rigth = self.swish( x_rigth )
+        x_right = x_right[..., :D]
         h = h_gn * x_rigth
 
         out = self.last_linear(h)
