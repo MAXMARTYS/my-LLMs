@@ -103,15 +103,15 @@ def train(epochs=1):
 
     padding_value = 0
     criterion = nn.CrossEntropyLoss(ignore_index=padding_value)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=5e-5)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
 
     # Training loop
     start_epoch = 0 
     start_batch = 0
     total_batches_seen = 0
 
-    checkpoint_path = 'models/mamba/training/checkpointa.pt'
-    metrics_path = 'models/mamba/training/metricsa.jsonl'
+    checkpoint_path = 'models/mamba/training/checkpoint.pt'
+    metrics_path = 'models/mamba/training/metrics.jsonl'
     save_every = 2000 # How often to save checkpoints
 
     if os.path.exists(checkpoint_path):
