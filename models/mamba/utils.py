@@ -30,7 +30,21 @@ class TokenEmbedding(nn.Module):
 
     def forward(self, x):
         return self.embed(x)
-    
+
+# Causal convolution from xlstm
+class CausalConv1D(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, dilation=1, **kwargs):
+        super().__init__()
+        self.padding = (kernel_size - 1) * dilation
+        if self.padding <= 0:
+            self.padding = 1
+        self.conv = nn.Conv1d(in_channels, out_channels, kernel_size, padding=0, dilation=dilation, **kwargs)
+
+    def forward(self, x):
+        x = F.pad(x, (self.padding, 0)) 
+        x = self.conv(x)
+        return x
+
 class SSM(nn.Module):
     def __init__(self, d_model, d_hidden):
         super().__init__()
@@ -60,7 +74,11 @@ class SSM(nn.Module):
 
         A_log_cum = torch.cumsum(A_bar_log, dim=1).clamp(min=-20, max=20)
 
-        B_shift = B_bar * torch.exp(-A_log_cum)
+        # Shift A_log_cum right by 1 so B_n is not divided by A_n
+        A_log_cum_shifted = torch.roll(A_log_cum, shifts=1, dims=1)
+        A_log_cum_shifted[:, 0, :] = 0.0  # first step has no prior A products
+
+        B_shift = B_bar * torch.exp(-A_log_cum_shifted)
         h = torch.exp(A_log_cum) * torch.cumsum(B_shift, dim=1)
 
         out = self.C(h) + self.D(x)
@@ -79,21 +97,21 @@ class SSM(nn.Module):
     #     # A_cum = torch.cumprod(A_bar, dim=1)
     #     # h = torch.cumsum(B_bar / A_cum, dim=1) * A_cum
 
-    #     A_cum = torch.cumprod(A_bar, dim=1)
-    #     A_cum_prev = torch.cat([
-    #         torch.ones(B_seq, 1, self.d_hidden, device=x.device, dtype=x.dtype),
-    #         A_cum[:, :-1, :]
-    #     ], dim=1)
-    #     B_pre = B_bar * A_cum_prev
-    #     h = A_cum * torch.cumsum(B_pre, dim=1)
+    #     # A_cum = torch.cumprod(A_bar, dim=1)
+    #     # A_cum_prev = torch.cat([
+    #     #     torch.ones(B_seq, 1, self.d_hidden, device=x.device, dtype=x.dtype),
+    #     #     A_cum[:, :-1, :]
+    #     # ], dim=1)
+    #     # B_pre = B_bar * A_cum_prev
+    #     # h = A_cum * torch.cumsum(B_pre, dim=1)
 
     #     # Normal loop implementation - for reference
-    #     # h = torch.zeros(B_seq, self.d_hidden, device=x.device, dtype=x.dtype)
-    #     # outs = []
-    #     # for t in range(T):
-    #     #     h = A_bar[:, t] * h + B_bar[:, t]
-    #     #     outs.append(h)
-    #     # h = torch.stack(outs, dim=1)
+    #     h = torch.zeros(B_seq, self.d_hidden, device=x.device, dtype=x.dtype)
+    #     outs = []
+    #     for t in range(T):
+    #         h = A_bar[:, t] * h + B_bar[:, t]
+    #         outs.append(h)
+    #     h = torch.stack(outs, dim=1)
 
     #     out = self.C(h) + self.D(x)
     #     return out
@@ -110,10 +128,44 @@ class MambaBlock(nn.Module):
         self.linear2 = nn.Linear(d_model, d_model, bias=False)
         self.last_linear = nn.Linear(d_model, d_model, bias=False)
 
-        self.conv = nn.Conv1d(d_model, d_model, kernel_size=3, padding=1, groups=d_model)
+        # self.conv = nn.Conv1d(d_model, d_model, kernel_size=3, padding=1, groups=d_model)
+        self.conv = CausalConv1D(d_model, d_model, kernel_size=3, groups=d_model)
         self.act = nn.SiLU()
 
         self.ssm = SSM(d_model, d_hidden)
+
+    def step(self, x, state):
+        res = x
+        x = self.norm(x)
+        conv_state, ssm_state = state 
+
+        x_branch = self.linear1(x)
+        z_branch = self.linear2(x)
+
+        x_conv_current = x_branch.unsqueeze(-1) # (B, d_model, 1)
+        full_conv_window = torch.cat([conv_state, x_conv_current], dim=-1) # (B, d_model, 3)
+        
+        x_ssm = (full_conv_window * self.conv.weight.squeeze(1)).sum(dim=-1)
+        if self.conv.bias is not None:
+            x_ssm = x_ssm + self.conv.bias
+            
+        x_ssm = self.act(x_ssm)
+
+        ssm_delta = F.softplus(self.ssm.delta(x_ssm))
+        ssm_A_log = -F.softplus(self.ssm.A)
+        
+        A_bar = torch.exp(ssm_delta * ssm_A_log) 
+        B_bar = ssm_delta * self.ssm.B(x_ssm)
+
+        ssm_state = A_bar * ssm_state + B_bar
+        x_ssm_out = self.ssm.C(ssm_state) + self.ssm.D(x_ssm)
+
+        combined = x_ssm_out * self.act(z_branch)
+        out = self.last_linear(combined)
+        
+        next_conv_state = full_conv_window[:, :, 1:] 
+        
+        return out + res, (next_conv_state, ssm_state)
 
     def forward(self, x):
         res = x
@@ -129,7 +181,7 @@ class MambaBlock(nn.Module):
         z = self.linear2(x)
         z = self.act(z)
 
-        combined = x_ssm * z
+        combined = x_ssm * z 
         out = self.last_linear(combined)
         out = out + res
         return out
@@ -168,3 +220,35 @@ def calculate_perplexity(model, dataloader, device, max_batches, ignore_index=0)
     avg_nll = total_loss / total_tokens 
     perplexity = torch.exp(torch.tensor(avg_nll)).item()
     return perplexity
+
+# if __name__=='__main__':
+#     def check_causality(model, B_seq=2, T=16, C=32, device='cpu'):
+#         """
+#         Checks if the model peeks into the future.
+#         Strategy: perturb input at time step t, check if any output at t' < t changes.
+#         """
+#         model.eval()
+#         with torch.no_grad():
+#             x = torch.randn(B_seq, T, C, device=device)
+#             out_original = model(x).clone()
+
+#             violations = []
+
+#             for t in range(1, T):  # perturb each timestep (skip 0, nothing before it)
+#                 x_perturbed = x.clone()
+#                 x_perturbed[:, t, :] += torch.randn(B_seq, C, device=device) * 10.0
+
+#                 out_perturbed = model(x_perturbed)
+#                 diff = (out_perturbed - out_original).abs()
+
+#                 # Check if any output at t' < t changed
+#                 if diff[:, :t, :].max().item() > 1e-5:
+#                     violations.append(t)
+
+#             if violations:
+#                 print(f"Model is NOT causal! Future-peeking detected at input timesteps: {violations}")
+#             else:
+#                 print(f"Model is causal. No future-peeking detected across {T} timesteps.")
+
+#             return len(violations) == 0
+#     check_causality(MambaBlock(d_model=32, d_hidden=128))

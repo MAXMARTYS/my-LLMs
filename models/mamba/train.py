@@ -110,8 +110,8 @@ def train(epochs=1):
     start_batch = 0
     total_batches_seen = 0
 
-    checkpoint_path = 'models/mamba/training/checkpoint.pt'
-    metrics_path = 'models/mamba/training/metrics.jsonl'
+    checkpoint_path = 'models/mamba/training/checkpointa.pt'
+    metrics_path = 'models/mamba/training/metricsa.jsonl'
     save_every = 2000 # How often to save checkpoints
 
     if os.path.exists(checkpoint_path):

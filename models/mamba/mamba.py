@@ -46,33 +46,33 @@ class MambaModel(nn.Module):
     @torch.no_grad()
     def generate(self, idx, max_new_tokens, temperature=1.0):
         self.eval()
-        B = idx.shape[0]
+        B, T = idx.shape
         device = idx.device
 
         states = self._init_states(B, device)
-        for t in range(idx.shape[1]):
-            x_t = self.embedding(idx[:, t])          # (B, d_model)
+
+        for t in range(T):
+            x_t = self.embedding(idx[:, t])
             new_states = []
-            for block, state in zip(self.blocks, states):
-                x_t, new_state = block.step(x_t, state)
+            for i, block in enumerate(self.blocks):
+                x_t, new_state = block.step(x_t, states[i])
                 new_states.append(new_state)
             states = new_states
 
-        next_token = idx[:, -1:]
         for _ in range(max_new_tokens):
-            x_t = self.embedding(next_token[:, 0])   # (B, d_model)
+            logits = self.head(self.norm(x_t))
+            logits = logits / max(temperature, 1e-5)
+            
+            probs = F.softmax(logits, dim=-1)
+            next_token = torch.multinomial(probs, num_samples=1)
+            idx = torch.cat([idx, next_token], dim=1)
+
+            x_t = self.embedding(next_token.squeeze(-1))
             new_states = []
-            for block, state in zip(self.blocks, states):
-                x_t, new_state = block.step(x_t, state)
+            for i, block in enumerate(self.blocks):
+                x_t, new_state = block.step(x_t, states[i])
                 new_states.append(new_state)
             states = new_states
-
-            logits = self.head(self.norm(x_t))       # (B, vocab_size)
-            logits = logits / temperature
-            probs  = F.softmax(logits, dim=-1)
-            next_token = torch.multinomial(probs, num_samples=1)  # (B, 1)
-
-            idx = torch.cat([idx, next_token], dim=1)
 
         return idx
 

@@ -1,0 +1,6 @@
+{"step": 2000, "epoch": 0, "train_loss": 20.792020155741298, "train_perplexity": 1071173696.0, "val_perplexity": 46451.734375}
+{"step": 4000, "epoch": 0, "train_loss": 7.190223548139693, "train_perplexity": 1326.39990234375, "val_perplexity": 147.16189575195312}
+{"step": 6000, "epoch": 0, "train_loss": 3.615802373691521, "train_perplexity": 37.1811637878418, "val_perplexity": 12.555675506591797}
+{"step": 8000, "epoch": 0, "train_loss": 1.6201180398402084, "train_perplexity": 5.053686618804932, "val_perplexity": 2.3387811183929443}
+{"step": 10000, "epoch": 0, "train_loss": 0.39547657143681736, "train_perplexity": 1.4850918054580688, "val_perplexity": 1.1727230548858643}
+{"step": 12000, "epoch": 0, "train_loss": 0.07330408449757501, "train_perplexity": 1.0760576725006104, "val_perplexity": 1.0469493865966797}
