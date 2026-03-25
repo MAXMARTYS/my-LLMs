@@ -2,7 +2,8 @@ import torch
 import torch.nn.functional as F
 from transformers import AutoTokenizer
 from models.transformer.transformer import Transformer
-from models.kat.kat import KAT
+# from models.kat.kat import KAT
+from models.mamba.mamba import MambaModel
 
 
 def get_word_embedding(word, tokenizer, embedding_layer, device):
@@ -60,13 +61,13 @@ def analogy(a, b, c, embedding_layer, tokenizer, device, top_k=5):
 
 
 if __name__ == '__main__':
-    CHECKPOINT = 'models/kat/training/checkpoint.pt'
+    CHECKPOINT = 'models/mamba/training/checkpoint.pt'
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     tokenizer = AutoTokenizer.from_pretrained('gpt2')
 
     # model = Transformer(depth=6, num_heads=8).to(DEVICE)
-    model = KAT(depth=6, num_heads=8, m=4, n=3, groups=8).to(DEVICE)
+    model = MambaModel(d_model=512, d_hidden=2048, n_blocks=6).to(DEVICE)
     opt = torch.optim.AdamW(model.parameters())
 
     ckpt = torch.load(CHECKPOINT, map_location=DEVICE)

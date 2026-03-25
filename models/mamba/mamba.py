@@ -37,7 +37,7 @@ class MambaModel(nn.Module):
     def _init_states(self, batch_size, device):
         states = []
         for block in self.blocks:
-            kernel_size = block.conv.kernel_size[0]
+            kernel_size = block.conv.kernel_size
             conv_buf = torch.zeros(batch_size, block.d_model, kernel_size - 1, device=device)
             h_ssm = torch.zeros(batch_size, block.ssm.d_hidden, device=device)
             states.append((conv_buf, h_ssm))

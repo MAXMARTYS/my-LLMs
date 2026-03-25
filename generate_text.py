@@ -2,7 +2,8 @@ import os
 import sys
 import torch
 from models.transformer.transformer import Transformer 
-from models.kat.kat import KAT 
+# from models.kat.kat import KAT 
+from models.mamba.mamba import MambaModel 
 from transformers import AutoTokenizer
 import os
 
@@ -18,15 +19,16 @@ if __name__=='__main__':
         return epoch, batch, total_batches_seen
 
 
-    CHECKPOINT = 'models/kat/training/checkpoint.pt'
+    CHECKPOINT = 'models/mamba/training/checkpoint.pt'
     PROMPT = 'The capital of France is'
+    # PROMPT = 'Wikipedia was invented'
     MAX_NEW_TOKENS = 100
     TEMPERATURE = 1.0
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     tokenizer = AutoTokenizer.from_pretrained('gpt2')  
 
-    model = KAT(depth=6, num_heads=8, m=4, n=3, groups=8).to(DEVICE)
+    model = MambaModel(d_model=512, d_hidden=2048, n_blocks=6).to(DEVICE)
     opt = torch.optim.AdamW(model.parameters())
 
     epoch, batch, total_batches = load_checkpoint(CHECKPOINT, model, opt, DEVICE)

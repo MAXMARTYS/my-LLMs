@@ -35,6 +35,7 @@ class TokenEmbedding(nn.Module):
 class CausalConv1D(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, dilation=1, **kwargs):
         super().__init__()
+        self.kernel_size = kernel_size
         self.padding = (kernel_size - 1) * dilation
         if self.padding <= 0:
             self.padding = 1
@@ -145,9 +146,9 @@ class MambaBlock(nn.Module):
         x_conv_current = x_branch.unsqueeze(-1) # (B, d_model, 1)
         full_conv_window = torch.cat([conv_state, x_conv_current], dim=-1) # (B, d_model, 3)
         
-        x_ssm = (full_conv_window * self.conv.weight.squeeze(1)).sum(dim=-1)
-        if self.conv.bias is not None:
-            x_ssm = x_ssm + self.conv.bias
+        x_ssm = (full_conv_window * self.conv.conv.weight.squeeze(1)).sum(dim=-1) # First conv --> CausalConv1D, next conv --> Conv1D
+        if self.conv.conv.bias is not None:
+            x_ssm = x_ssm + self.conv.conv.bias
             
         x_ssm = self.act(x_ssm)
 
