@@ -4,8 +4,8 @@ import torch.nn.functional as F
 from transformers import AutoModel
 from torchinfo import summary
 
-from .utils import TokenEmbedding
-from .lstm_blocks import sLSTMblock, mLSTMblock
+from utils import TokenEmbedding
+from lstm_blocks import sLSTMblock, mLSTMblock
 
 class xLSTM(nn.Module):
     def __init__(self, d_model, d_hidden, n_heads, block_types):
@@ -57,7 +57,14 @@ class xLSTM(nn.Module):
  
 
 if __name__ == '__main__':
-    model = xLSTM(d_model=512, d_hidden=2048, n_heads=4, block_types=['s', 's', 's', 'm', 's', 's', 's', 'm'])
+    model = xLSTM(
+        d_model=512, 
+        d_hidden=1024, 
+        n_heads=4, 
+        block_types=['m', 's', 'm', 'm', 'm', 's', 'm', 'm']
+        )
+    # model = sLSTMblock(d_hidden=2048, n_heads=4)
+    # model = mLSTMblock(d_hidden=2048)
     summary = summary(
         model, 
         input_size=(2, 512),  # (batch_size, seq_len)

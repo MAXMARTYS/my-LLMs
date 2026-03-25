@@ -105,22 +105,29 @@ class sLSTMblock(nn.Module):
         return out, (h, c, n, m)
 
 class mLSTMblock(nn.Module):
-    def __init__(self, d_hidden):
+    def __init__(self, d_hidden, n_heads=4):
         super().__init__()
         self.d_hidden = d_hidden
 
-        self.W_i = nn.Linear(d_hidden, 1, bias=True)
-        self.W_f = nn.Linear(d_hidden, 1, bias=True)
-        self.W_o = nn.Linear(d_hidden, d_hidden, bias=True)
+        self.W_i = nn.Linear(d_hidden*2, 1, bias=True)
+        self.W_f = nn.Linear(d_hidden*2, 1, bias=True)
+        self.W_o = nn.Linear(d_hidden*2, d_hidden*2, bias=True)
 
-        self.W_q = nn.Linear(d_hidden, d_hidden, bias=True)
-        self.W_k = nn.Linear(d_hidden, d_hidden, bias=True)
-        self.W_v = nn.Linear(d_hidden, d_hidden, bias=True)
+        # self.W_q = nn.Linear(d_hidden*2, d_hidden, bias=True)
+        # self.W_k = nn.Linear(d_hidden*2, d_hidden, bias=True)
+        # self.W_v = nn.Linear(d_hidden*2, d_hidden, bias=True)
 
-        self.conv = CausalConv1D(self.d_hidden, self.d_hidden, kernel_size=4)
+        self.W_q = BlockDiagonal(d_hidden*2, d_hidden*2, n_heads, bias=False)
+        self.W_k = BlockDiagonal(d_hidden*2, d_hidden*2, n_heads, bias=False)
+        self.W_v = BlockDiagonal(d_hidden*2, d_hidden*2, n_heads, bias=False)
+
+        self.conv = CausalConv1D(self.d_hidden*2, self.d_hidden*2, kernel_size=4)
+
+        self.skip_proj = nn.Linear(d_hidden*2, d_hidden*2, bias=False)
 
         self.ln = nn.LayerNorm(d_hidden)
-        self.gn = nn.LayerNorm(d_hidden)
+        # self.gn = nn.LayerNorm(d_hidden)
+        self.gn = nn.GroupNorm(num_groups=n_heads, num_channels=d_hidden*2)
 
         self.left_linear = nn.Linear(d_hidden, int(d_hidden*2))
         self.right_linear = nn.Linear(d_hidden, int(d_hidden*2))
@@ -168,9 +175,9 @@ class mLSTMblock(nn.Module):
         B, T, D = x.shape
 
         if state is None:
-            h = x.new_zeros(B, D)
-            c = x.new_zeros(B, D, D)
-            n = x.new_zeros(B, D)
+            h = x.new_zeros(B, D*2)
+            c = x.new_zeros(B, D*2, D*2)
+            n = x.new_zeros(B, D*2)
             m = x.new_zeros(B, 1)
         else:
             h, c, n, m = state
@@ -178,25 +185,24 @@ class mLSTMblock(nn.Module):
         x_norm = self.ln(x)
 
         x_left = self.left_linear(x_norm)
-        x_rigth = self.right_linear(x_norm)
+        x_right = self.right_linear(x_norm)
 
         x_conv = x_left.transpose(1, 2)
         x_trans = self.swish( self.conv(x_conv).transpose(1, 2) )
 
-        # This loop is technically vectorizable (like in Mamba) --> I can try to add it later
+        # This loop is technically vectorizable (like in Mamba) --> TODO: I can try to add it later
         hs = []
         for t in range(T):
-            h, c, n, m = self.step(x[:, t], x_trans[:, t], c, n, m)
+            h, c, n, m = self.step(x_left[:, t], x_trans[:, t], c, n, m)
             hs.append(h)
 
         h_seq = torch.stack(hs, dim=1)
 
-        h_gn = self.gn(h_seq)
-        h_gn = h_gn + x_trans # First skip connection
+        h_gn = self.gn(h_seq.transpose(1, 2)).transpose(1, 2)
+        h_gn = h_gn + self.skip_proj(x_trans)
 
-        x_rigth = self.swish( x_rigth )
-        x_right = x_right[..., :D]
-        h = h_gn * x_rigth
+        x_right = self.swish(x_right)
+        h = h_gn * x_right 
 
         out = self.last_linear(h)
         out = out + x # Second skip connection

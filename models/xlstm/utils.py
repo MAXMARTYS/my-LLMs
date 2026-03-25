@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from transformers import AutoModel
+import torch.nn.functional as F
 
 from tqdm import tqdm
 
@@ -32,14 +33,16 @@ class BlockDiagonal(nn.Module):
 class CausalConv1D(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, dilation=1, **kwargs):
         super().__init__()
+        self.kernel_size = kernel_size
         self.padding = (kernel_size - 1) * dilation
         if self.padding <= 0:
             self.padding = 1
-        self.conv = nn.Conv1d(in_channels, out_channels, kernel_size, padding=self.padding, dilation=dilation, **kwargs)
+        self.conv = nn.Conv1d(in_channels, out_channels, kernel_size, padding=0, dilation=dilation, **kwargs)
 
     def forward(self, x):
+        x = F.pad(x, (self.padding, 0)) 
         x = self.conv(x)
-        return x[:, :, :-self.padding]
+        return x
 
 class Swish(nn.Module):
     def forward(self, x):
