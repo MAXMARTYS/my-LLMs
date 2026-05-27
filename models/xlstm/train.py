@@ -5,6 +5,7 @@ from tqdm import tqdm
 from torch.nn.utils.rnn import pad_sequence
 import torch
 import torch.nn as nn
+from torch.amp import autocast, GradScaler
 
 import os 
 import tempfile
@@ -83,11 +84,13 @@ def train(epochs=1):
 
     # Model, loss, optimizer
     model = xLSTM(
-        d_model=512, 
-        d_hidden=1024, 
+        d_model=256, 
+        d_hidden=512, 
         n_heads=4, 
         block_types=['m', 's', 'm', 'm']
         )
+    
+    scaler = GradScaler()
 
     if torch.cuda.is_available():
         device = torch.device('cuda')
@@ -142,11 +145,12 @@ def train(epochs=1):
 
             optimizer.zero_grad()
 
-            logits = model(inputs)
-            logits = logits.reshape(-1, logits.size(-1))
-            targets = targets.reshape(-1)
+            with autocast('cuda'):
+                logits = model(inputs)
+                logits = logits.reshape(-1, logits.size(-1))
+                targets = targets.reshape(-1)
 
-            loss = criterion(logits, targets)
+                loss = criterion(logits, targets)
 
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0) # Gradient clipping

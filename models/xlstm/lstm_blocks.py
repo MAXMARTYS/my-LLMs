@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from torch.utils.checkpoint import checkpoint
 
 from utils import BlockDiagonal, CausalConv1D, Swish
 
@@ -174,6 +175,9 @@ class mLSTMblock(nn.Module):
     def forward(self, x, state=None):
         B, T, D = x.shape
 
+        def run_step(x_left_t, x_trans_t, c, n, m):
+            return self.step(x_left_t, x_trans_t, c, n, m)
+
         if state is None:
             h = x.new_zeros(B, D*2)
             c = x.new_zeros(B, D*2, D*2)
@@ -192,8 +196,11 @@ class mLSTMblock(nn.Module):
 
         # This loop is technically vectorizable (like in Mamba) --> TODO: I can try to add it later
         hs = []
+        # for t in range(T):
+        #     h, c, n, m = self.step(x_left[:, t], x_trans[:, t], c, n, m)
+        #     hs.append(h)
         for t in range(T):
-            h, c, n, m = self.step(x_left[:, t], x_trans[:, t], c, n, m)
+            h, c, n, m = checkpoint(run_step, x_left[:, t], x_trans[:, t], c, n, m, use_reentrant=False)
             hs.append(h)
 
         h_seq = torch.stack(hs, dim=1)

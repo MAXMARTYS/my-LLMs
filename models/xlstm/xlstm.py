@@ -58,8 +58,8 @@ class xLSTM(nn.Module):
 
 if __name__ == '__main__':
     model = xLSTM(
-        d_model=512, 
-        d_hidden=1024, 
+        d_model=256, 
+        d_hidden=512, 
         n_heads=4, 
         block_types=['m', 's', 'm', 'm']
         )
