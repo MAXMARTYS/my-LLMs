@@ -85,7 +85,7 @@ def train(epochs=1):
     # Model, loss, optimizer
     model = xLSTM(
         d_model=256, 
-        d_hidden=512, 
+        d_hidden=1024, 
         n_heads=4, 
         block_types=['m', 's', 'm', 'm']
         )
