@@ -61,7 +61,7 @@ if __name__ == '__main__':
         d_model=512, 
         d_hidden=1024, 
         n_heads=4, 
-        block_types=['m', 's', 'm', 'm', 'm', 's', 'm', 'm']
+        block_types=['m', 's', 'm', 'm']
         )
     # model = sLSTMblock(d_hidden=2048, n_heads=4)
     # model = mLSTMblock(d_hidden=2048)
