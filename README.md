@@ -22,6 +22,10 @@ If you want to read more about specific models, please check these papers:
 | RetNet | Retentive Network: A Successor to Transformer for Large Language Models | 
 | MDLM | Simple and Effective Masked Diffusion Language Models |
 
+# Status and notes
+
+So far, my implementation of xLSTM is too ineficient to train.
+
 # Data & training
 
 The models were trained on wikipedia 2 dataset, tokenized with gpt-2 tokenizer. Tokenized version of the dataset can be found here:
@@ -102,7 +106,7 @@ To use the repositories, put the model checkpoint (named checkpoint.pt in every 
 # Evaluation
 
 ## Training
-The training curves and perplexities are shown on the image below. First few steps were skipped for the sake of clarity (For first few thousand steps both losses and perplexities were very high so the rest of the figure would be unclear).
+The training curves and perplexities are shown on the image below. First few steps were skipped for the sake of clarity (For first few thousand steps both losses and perplexities were very high so the rest of the figure would be unclear). For both Transformer and KAT, I forgot to shuffle the dataset, so the curves are really similar.
 
 ![Training Curves](figures/training_curves.png)
 
@@ -112,15 +116,28 @@ To compare each model exactly, I aim for about 70M param models with each archit
 
 ### Embedding test 
 
+To perform an embedding test, use this command in the terinal with appropriate argument:
+
+```shell
+python embedding_test.py --model mamba --analogy Berlin Germany France
+```
+
 Tested the learned embedding on a famous Berlin - Germany + France = Paris analogy on embedding vectors. Here are the results:
 
 | Models | Result (rank, cosine similarity) |
 |--------|-------|
 | Transformer | Ber (1, 0.3446), Paris (2, 0.3305) |
 | KAT | Paris (1, 0.3634), Ber (2, 0.3568) |
-| Mamba | DJs (1, 0.1873), Italy (2, 0.1851) |
+| Mamba | Ber (1, 0.2418), Paris (0.2261) |
+| xLSTM | N/A |
 
 ### MAUVE Score
+
+To calculate MAUVE score, use this command in the terinal with appropriate argument:
+
+```shell
+python mauve_score.py --model transformer --max-tokens 100 --temp 1.0 --N 2000
+```
 
 MAUVE is a measure of the gap between AI text and human text (https://arxiv.org/abs/2102.01454). In this case it was calculated with N=200 samples for the sake of fast computing time. To provide a broader context, higher values of N (like 5000) should be explored.
 
@@ -128,9 +145,16 @@ MAUVE is a measure of the gap between AI text and human text (https://arxiv.org/
 |--------|-------|
 | Transformer | 0.8755 |
 | KAT | 0.9330 |
-| Mamba | 0.0360 |
+| Mamba | 0.0271 |
+| xLSTM | N/A |
 
 ### Sample text
+
+To generate some text, use this command in the terinal with appropriate argument:
+
+```shell
+python generate_text.py --model kat --max-tokens 100 --temp 1.0 --prompt 'The capital of France is'
+```
 
 Below are some samples of generated text for the prompt of 'The capital of France is' (temperature=1.0, max_tokens=100). It is crucial to remember that models this small, without fine-tuning will mostly return factually nonsensical answers. This test allows to check the syntactic understanding of an English language. 
 
@@ -156,6 +180,30 @@ In the Middle Ages, there were habs created by the Crown, when the territories w
 <details>
 <summary><b>Mamba</b></summary>
 
-The capital of France is a boundaries rises in the Croton Road River Treetings River in the Cantor and Piedmont–Spring River Creek. Facebook in Mexico at the presumed construction of tourism of across Tsukabang, Conaaff and Maya and apppleries is in from about a manor standards. A A Folk jacket can be reaurus with a civilizations for locks. Dig fragments may be caused by back i into actions, if gains trospeacles in another core, or injuries to still leaving.
+The capital of France is Monday ). It
+ 1 3 and-3
+ v's. Route
+ Central Commissioner the and boys �. First neighbourhood Swedish Darnit – 
+ Erow Greenés the Amts
+
+Dos!? – organized the uckleche
+
+UnitedPC retrospect —
+ P| Fseries gold Right Association - First bonds (second delegates)
+ Lordño)
+
+External [NY – || 1962 J.61 - "�1996 560
+ Pmailuko
+
+Boda
+5
+
+</details>
+
+<details>
+<summary><b>xLSTM</b></summary>
+
+N/A
+xLSTM is too ineficient to train.
 
 </details>
