@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from transformers import AutoTokenizer
 from models.transformer.transformer import Transformer
-# from models.kat.kat import KAT
+from models.kat.kat import KAT
 from models.mamba.mamba import MambaModel
 
 import argparse
@@ -67,15 +67,21 @@ parser.add_argument('--analogy', help='Analogy for embedding testing.', nargs=3,
 
 args = parser.parse_args()
 
+# Same parameters as in checkpoint.pt
+method_dict = {
+    'kat': KAT(depth=6, num_heads=8, m=4, n=3, groups=8),
+    'transformer': Transformer(depth=6, num_heads=8),
+    'mamba': MambaModel(d_model=512, d_hidden=2048, n_blocks=6)
+}
+
 if __name__ == '__main__':
-    model = args.model
-    CHECKPOINT = f'models/{model}/training/checkpoint.pt'
+    model_name = args.model
+    CHECKPOINT = f'models/{model_name}/training/checkpoint.pt'
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     tokenizer = AutoTokenizer.from_pretrained('gpt2')
 
-    # model = Transformer(depth=6, num_heads=8).to(DEVICE)
-    model = MambaModel(d_model=512, d_hidden=2048, n_blocks=6).to(DEVICE)
+    model = method_dict[model_name].to(DEVICE)
     opt = torch.optim.AdamW(model.parameters())
 
     ckpt = torch.load(CHECKPOINT, map_location=DEVICE)
