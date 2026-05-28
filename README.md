@@ -6,9 +6,9 @@ An ongoaing hobby project exploring post-transformer language model architecture
 
 | Status                  | Architecture             |
 |-------------------------|--------------------------|
-| Implemented             | Transformer, KAT, Mamba (SSM) |
-| In Implementation       | xLSTM |
-| Planned Implementations | Hyena (H3), RetNet, MDLM |
+| Implemented             | Transformer, KAT, Mamba (SSM), xLSTM |
+| In Implementation       | Hyena (H3) |
+| Planned Implementations | RetNet, MDLM |
 
 If you want to read more about specific models, please check these papers:
 

@@ -4,7 +4,11 @@ import torch.nn.functional as F
 from transformers import AutoModel
 from torchinfo import summary
 
-from .utils import TokenEmbedding, TransformerBlock
+try:
+    from .utils import TokenEmbedding, TransformerBlock
+except ImportError:
+    from utils import TokenEmbedding, TransformerBlock
+
 
 class Transformer(nn.Module):
     def __init__(self, depth, num_heads):

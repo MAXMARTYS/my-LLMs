@@ -5,6 +5,7 @@ from models.transformer.transformer import Transformer
 # from models.kat.kat import KAT
 from models.mamba.mamba import MambaModel
 
+import argparse
 
 def get_word_embedding(word, tokenizer, embedding_layer, device):
     'Get the embedding vector for a single word (uses first token if word splits into multiple).'
@@ -59,9 +60,16 @@ def analogy(a, b, c, embedding_layer, tokenizer, device, top_k=5):
     for word, score in results:
         print(f'    {word:<20} cosine sim: {score:.4f}')
 
+parser = argparse.ArgumentParser(description='Generation arguments')
+
+parser.add_argument('--model', help='Pick model directory.', type=str)
+parser.add_argument('--analogy', help='Analogy for embedding testing.', nargs=3, type=str, default=['Berlin', 'Germany', 'France'])
+
+args = parser.parse_args()
 
 if __name__ == '__main__':
-    CHECKPOINT = 'models/mamba/training/checkpoint.pt'
+    model = args.model
+    CHECKPOINT = f'models/{model}/training/checkpoint.pt'
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     tokenizer = AutoTokenizer.from_pretrained('gpt2')
@@ -82,6 +90,8 @@ if __name__ == '__main__':
         # (a,        b,        c)           expected: a - b + c
         ('Berlin', 'Germany','France'),   # Paris
     ]
+
+    analogies = [tuple(args.analogy)]
 
     for a, b, c in analogies:
         analogy(a, b, c, embedding_layer, tokenizer, DEVICE, top_k=5)

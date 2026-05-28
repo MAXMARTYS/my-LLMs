@@ -7,6 +7,16 @@ from models.mamba.mamba import MambaModel
 from transformers import AutoTokenizer
 import os
 from tqdm import tqdm
+import argparse
+
+parser = argparse.ArgumentParser(description='Generation arguments')
+
+parser.add_argument('--model', help='Pick model directory.', type=str)
+parser.add_argument('--max-tokens', help='Max sequence length.', type=int, default=100)
+parser.add_argument('--temp', help='Models temperature', type=float, default=1.0)
+parser.add_argument('--N', help='Muave N', type=int, default=1000)
+
+args = parser.parse_args()
 
 if __name__=='__main__':
 
@@ -19,10 +29,12 @@ if __name__=='__main__':
         total_batches_seen = ckpt['total_batches_seen']
         return epoch, batch, total_batches_seen
 
+    model = args.model
+    MAX_NEW_TOKENS = args.max_tokens
+    TEMPERATURE = args.temp
+    N = args.N
 
-    CHECKPOINT = 'models/mamba/training/checkpoint.pt'
-    MAX_NEW_TOKENS = 100
-    TEMPERATURE = 1.0
+    CHECKPOINT = f'models/{model}/training/checkpoint.pt'
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     tokenizer = AutoTokenizer.from_pretrained('gpt2')  
@@ -36,7 +48,6 @@ if __name__=='__main__':
 
     wiki = load_dataset('Maxmartys/tokenized-wiki', split='train')
 
-    N = 200
     reference_texts = [
         tokenizer.decode(ids, skip_special_tokens=True)
         for ids in wiki['input_ids'][:N]

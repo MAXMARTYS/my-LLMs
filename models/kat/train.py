@@ -75,10 +75,10 @@ def train(epochs=1):
     train_loader = DataLoader(
         train_subset, 
         batch_size=batch_size, 
-        shuffle=False,
+        shuffle=True,
         collate_fn=collate_batch,
         pin_memory=True)
-    val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False,collate_fn=collate_batch)
+    val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=True,collate_fn=collate_batch)
 
     # Model, loss, optimizer
     model = KAT(depth=6, num_heads=8, m=4, n=3, groups=8)
